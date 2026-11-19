@@ -4,16 +4,61 @@
              xmlns:vm="using:NovelShelf.App.ViewModels"
              x:Class="NovelShelf.App.Views.LibraryView"
              x:DataType="vm:LibraryViewModel">
-    <Grid ColumnDefinitions="320,*" RowDefinitions="Auto,*" Margin="24,16">
-        <TextBlock Grid.ColumnSpan="2" Text="Biblioteca" Theme="{StaticResource TitleTextBlockStyle}" Margin="0,0,0,12" />
+    <Grid x:Name="Root" ColumnDefinitions="320,*" RowDefinitions="Auto,*" Margin="24,16">
+        <Grid Grid.ColumnSpan="2" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+            <TextBlock Text="Biblioteca" Theme="{StaticResource TitleTextBlockStyle}" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <Button Command="{Binding ShowListCommand}" Classes.accent="{Binding !IsGridView}" ToolTip.Tip="Ver em lista">
+                    <ui:FASymbolIcon Symbol="List" />
+                </Button>
+                <Button Command="{Binding ShowGridCommand}" Classes.accent="{Binding IsGridView}" ToolTip.Tip="Ver em grade de capas">
+                    <ui:FASymbolIcon Symbol="ViewAll" />
+                </Button>
+            </StackPanel>
+        </Grid>
 
-        <Grid Grid.Row="1">
-            <TextBlock Text="Sua biblioteca está vazia. Use “Buscar novels” ou “Mangás e HQs” para adicionar a primeira."
+        <Grid Grid.Row="1" RowDefinitions="Auto,*">
+            <StackPanel Spacing="8" Margin="0,0,0,8" IsVisible="{Binding HasNovels}">
+                <TextBox Text="{Binding SearchText}" PlaceholderText="Buscar por título ou autor" />
+                <WrapPanel>
+                    <ComboBox ItemsSource="{x:Static vm:LibraryViewModel.KindOptions}" SelectedItem="{Binding KindFilter}"
+                              Width="148" Margin="0,0,8,8" ToolTip.Tip="Tipo de obra" />
+                    <ComboBox ItemsSource="{Binding SiteOptions}" SelectedItem="{Binding SiteFilter}"
+                              Width="148" Margin="0,0,8,8" ToolTip.Tip="Site de origem" />
+                    <ComboBox ItemsSource="{x:Static vm:LibraryViewModel.KindleOptions}" SelectedItem="{Binding KindleFilter}"
+                              Width="148" Margin="0,0,8,8" ToolTip.Tip="Situação no Kindle" />
+                    <ComboBox ItemsSource="{x:Static vm:LibraryViewModel.SortOptions}" SelectedItem="{Binding SortOrder}"
+                              Width="148" Margin="0,0,8,8" ToolTip.Tip="Ordenação" />
+                    <Button Content="Limpar filtros" Command="{Binding ClearFiltersCommand}" IsVisible="{Binding IsFiltered}"
+                            Margin="0,0,8,8" />
+                </WrapPanel>
+            </StackPanel>
+            <TextBlock Grid.Row="1" Text="Sua biblioteca está vazia. Use “Buscar novels” ou “Mangás e HQs” para adicionar a primeira."
                        TextWrapping="Wrap" Opacity="0.7" IsVisible="{Binding !HasNovels}" />
-            <ListBox ItemsSource="{Binding Novels}" SelectedItem="{Binding Selected}" Background="Transparent">
+            <TextBlock Grid.Row="1" Text="Nenhuma obra com esses filtros."
+                       TextWrapping="Wrap" Opacity="0.7" IsVisible="{Binding HasNoMatches}" />
+            <ListBox Grid.Row="1" ItemsSource="{Binding Novels}" SelectedItem="{Binding Selected}" Background="Transparent"
+                     IsVisible="{Binding !IsGridView}">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:LibraryItemViewModel">
-                        <Grid ColumnDefinitions="Auto,*" Margin="0,4">
+                        <Grid ColumnDefinitions="Auto,*" Margin="0,4" Background="Transparent">
+                            <Grid.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Baixar capítulos" Command="{Binding Owner.DownloadItemCommand}" CommandParameter="{Binding}">
+                                        <MenuItem.Icon><ui:FASymbolIcon Symbol="Download" /></MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Header="Enviar para o Kindle" Command="{Binding Owner.SendItemToKindleCommand}" CommandParameter="{Binding}">
+                                        <MenuItem.Icon><ui:FASymbolIcon Symbol="Send" /></MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Header="{Binding ExportMenuHeader}" Command="{Binding Owner.ExportItemCommand}" CommandParameter="{Binding}">
+                                        <MenuItem.Icon><ui:FASymbolIcon Symbol="Folder" /></MenuItem.Icon>
+                                    </MenuItem>
+                                    <Separator />
+                                    <MenuItem Header="Remover da biblioteca" Command="{Binding Owner.RemoveItemCommand}" CommandParameter="{Binding}">
+                                        <MenuItem.Icon><ui:FASymbolIcon Symbol="Delete" /></MenuItem.Icon>
+                                    </MenuItem>
+                                </ContextMenu>
+                            </Grid.ContextMenu>
                             <Border Width="48" Height="68" CornerRadius="4" ClipToBounds="True" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
                                 <Image Source="{Binding Cover}" Stretch="UniformToFill" />
                             </Border>
@@ -23,6 +68,42 @@
                                 <TextBlock Text="{Binding KindleStatus}" FontSize="12" Opacity="0.6" TextTrimming="CharacterEllipsis" />
                             </StackPanel>
                         </Grid>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+            <ListBox Grid.Row="1" ItemsSource="{Binding Novels}" SelectedItem="{Binding Selected}" Background="Transparent"
+                     IsVisible="{Binding IsGridView}">
+                <ListBox.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <WrapPanel />
+                    </ItemsPanelTemplate>
+                </ListBox.ItemsPanel>
+                <ListBox.ItemTemplate>
+                    <DataTemplate x:DataType="vm:LibraryItemViewModel">
+                        <StackPanel Width="140" Spacing="4" Margin="4" Background="Transparent">
+                            <StackPanel.ContextMenu>
+                                <ContextMenu>
+                                    <MenuItem Header="Baixar capítulos" Command="{Binding Owner.DownloadItemCommand}" CommandParameter="{Binding}">
+                                        <MenuItem.Icon><ui:FASymbolIcon Symbol="Download" /></MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Header="Enviar para o Kindle" Command="{Binding Owner.SendItemToKindleCommand}" CommandParameter="{Binding}">
+                                        <MenuItem.Icon><ui:FASymbolIcon Symbol="Send" /></MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Header="{Binding ExportMenuHeader}" Command="{Binding Owner.ExportItemCommand}" CommandParameter="{Binding}">
+                                        <MenuItem.Icon><ui:FASymbolIcon Symbol="Folder" /></MenuItem.Icon>
+                                    </MenuItem>
+                                    <Separator />
+                                    <MenuItem Header="Remover da biblioteca" Command="{Binding Owner.RemoveItemCommand}" CommandParameter="{Binding}">
+                                        <MenuItem.Icon><ui:FASymbolIcon Symbol="Delete" /></MenuItem.Icon>
+                                    </MenuItem>
+                                </ContextMenu>
+                            </StackPanel.ContextMenu>
+                            <Border Height="200" CornerRadius="6" ClipToBounds="True" Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}">
+                                <Image Source="{Binding Cover}" Stretch="UniformToFill" />
+                            </Border>
+                            <TextBlock Text="{Binding Novel.Title}" TextWrapping="Wrap" MaxLines="2" FontWeight="SemiBold" ToolTip.Tip="{Binding Novel.Title}" />
+                            <TextBlock Text="{Binding KindleBadge}" FontSize="12" Opacity="0.7" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding KindleStatus}" />
+                        </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
@@ -44,7 +125,7 @@
                             <TextBlock Text="{Binding Selected.Progress}" />
                             <TextBlock Text="{Binding Selected.KindleStatus}" Opacity="0.8" />
                             <TextBlock Text="{Binding Selected.Novel.Status}" Opacity="0.6" />
-                            <TextBlock Text="{Binding Selected.Novel.SourceName}" Opacity="0.6" FontSize="12" />
+                            <TextBlock Text="{Binding Selected.SiteName}" Opacity="0.6" FontSize="12" />
                         </StackPanel>
                     </Grid>
 

@@ -50,7 +50,10 @@ public sealed partial class SearchViewModel(AppServices services, Action<long> o
     public bool HasSelection => Selected is not null;
     public bool HasDetails => Details is not null;
 
-    public INovelSource Source => services.Sources.All[0];
+    public IReadOnlyList<INovelSource> Sources => services.Sources.All;
+
+    [ObservableProperty]
+    private INovelSource _source = services.Sources.All[0];
 
     private bool CanSearch() => !string.IsNullOrWhiteSpace(Query);
 
