@@ -8,8 +8,11 @@ using NovelShelf.Devices;
 
 namespace NovelShelf.App.ViewModels;
 
-public sealed partial class KindleViewModel(AppServices services) : ViewModelBase
+public sealed partial class KindleViewModel(AppServices services, Action openBookStyle) : ViewModelBase
 {
+    [RelayCommand]
+    private void OpenBookStyle() => openBookStyle();
+
     public ObservableCollection<KindleDevice> Devices { get; } = [];
     public IReadOnlyList<KindleProfile> Profiles => KindleProfile.All;
 

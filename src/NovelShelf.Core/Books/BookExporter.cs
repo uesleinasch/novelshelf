@@ -18,12 +18,7 @@ public sealed record ExportedBook(
 
 public sealed class BookExporter(LibraryStore store, AppPaths paths, PoliteHttpClient http)
 {
-    private const string KindleCss = """
-        h1 { font-size: 1.4em; text-align: center; margin: 1.5em 0 1em; }
-        p { text-indent: 1.2em; margin: 0 0 0.6em; text-align: justify; }
-        """;
-
-    public async Task<ExportedBook> ExportAsync(long novelId, CancellationToken ct = default)
+    public async Task<ExportedBook> ExportAsync(long novelId, BookStyle? defaultStyle = null, CancellationToken ct = default)
     {
         var novel = store.GetNovel(novelId) ?? throw new KeyNotFoundException($"Novel {novelId} não está na biblioteca.");
         var chapters = store.GetChapters(novelId);
@@ -31,6 +26,7 @@ public sealed class BookExporter(LibraryStore store, AppPaths paths, PoliteHttpC
             throw new InvalidOperationException($"'{novel.Title}' ainda não tem capítulos baixados.");
 
         var cover = await GetCoverAsync(novel, ct);
+        var style = store.GetBookStyle(novelId) ?? defaultStyle ?? BookStyle.Default;
         var content = new BookContent(
             Identifier: $"urn:uuid:{Guid.ParseExact(novel.BookId, "N")}",
             Title: novel.Title,
@@ -39,7 +35,8 @@ public sealed class BookExporter(LibraryStore store, AppPaths paths, PoliteHttpC
             Description: novel.Synopsis,
             Modified: chapters.Max(c => c.DownloadedAt),
             CoverJpeg: cover,
-            Chapters: chapters.Select(c => new BookChapter(c.Title, c.Html)).ToList());
+            Chapters: chapters.Select((c, i) => new BookChapter(style.ChapterTitle(i + 1, c.Title), c.Html)).ToList(),
+            Style: style);
 
         var baseName = FileNameFor(novel);
         var epubPath = Path.Combine(paths.Books, baseName + ".epub");
@@ -61,10 +58,8 @@ public sealed class BookExporter(LibraryStore store, AppPaths paths, PoliteHttpC
         CreatedDate = content.Modified,
         UniqueId = uniqueId,
         CoverImage = content.CoverJpeg,
-        CssFlows = [KindleCss],
-        Chapters = content.Chapters
-            .Select(c => new MobiChapter(c.Title, $"<h1>{System.Security.SecurityElement.Escape(c.Title)}</h1>\n{c.XhtmlBody}"))
-            .ToList(),
+        CssFlows = [content.EffectiveStyle.ToCss()],
+        Chapters = content.Chapters.Select(c => new MobiChapter(c.Title, content.ChapterBody(c))).ToList(),
     };
 
     public static uint UniqueIdFor(string bookId)

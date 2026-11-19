@@ -10,7 +10,7 @@ public sealed partial class MainViewModel : ViewModelBase
     public MainViewModel(AppServices services)
     {
         _services = services;
-        Kindle = new KindleViewModel(services);
+        Kindle = new KindleViewModel(services, () => OpenBookStyle(null));
         Library = new LibraryViewModel(services, Kindle, OpenLayout);
         Search = new SearchViewModel(services, OpenInLibrary);
         Comics = new ComicsViewModel(services, OpenInLibrary);
@@ -35,13 +35,27 @@ public sealed partial class MainViewModel : ViewModelBase
 
     private void OpenLayout(long novelId)
     {
-        if (_services.Library.GetNovel(novelId) is not { } comic)
+        if (_services.Library.GetNovel(novelId) is not { } work)
             return;
-        Current = new ComicLayoutViewModel(_services, comic, () =>
+        void Back()
         {
             Library.Reload(novelId);
             Current = Library;
-        });
+        }
+        Current = work.Kind == Core.Library.WorkKind.Comic
+            ? new ComicLayoutViewModel(_services, work, Back)
+            : OpenBookStyle(work, Back);
+    }
+
+    private BookStyleViewModel OpenBookStyle(Core.Library.LibraryNovel? novel, Action? back = null)
+    {
+        var page = new BookStyleViewModel(_services, novel, back ?? (() =>
+        {
+            Library.Reload();
+            Current = Kindle;
+        }));
+        Current = page;
+        return page;
     }
 
     private void OpenInLibrary(long novelId)

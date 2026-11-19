@@ -3,6 +3,7 @@ using Microsoft.Data.Sqlite;
 using NovelShelf.Comics;
 using NovelShelf.Core.Comics;
 using NovelShelf.Core.Sources;
+using NovelShelf.Ebook;
 
 namespace NovelShelf.Core.Library;
 
@@ -100,6 +101,17 @@ public sealed class LibraryStore
                 COMMIT;
                 """);
         }
+
+        if (ScalarLong(db, "PRAGMA user_version") < 3)
+        {
+            Execute(db, """
+                BEGIN;
+                ALTER TABLE novels ADD COLUMN book_style TEXT;
+                ALTER TABLE novels ADD COLUMN needs_resend INTEGER NOT NULL DEFAULT 0;
+                PRAGMA user_version = 3;
+                COMMIT;
+                """);
+        }
     }
 
     public ComicLayout GetComicLayout(long novelId)
@@ -112,8 +124,35 @@ public sealed class LibraryStore
     public void SetComicLayout(long novelId, ComicLayout layout)
     {
         using var db = Open();
-        Execute(db, "UPDATE novels SET comic_layout = $layout WHERE id = $id",
-            ("$layout", layout == ComicLayout.Default ? null : layout.Normalized().ToJson()), ("$id", novelId));
+        var json = layout == ComicLayout.Default ? null : layout.Normalized().ToJson();
+        Execute(db, """
+            UPDATE novels SET comic_layout = $layout,
+                needs_resend = CASE WHEN sent_at IS NOT NULL AND comic_layout IS NOT $layout THEN 1 ELSE needs_resend END
+            WHERE id = $id
+            """, ("$layout", json), ("$id", novelId));
+    }
+
+    public BookStyle? GetBookStyle(long novelId)
+    {
+        using var db = Open();
+        using var cmd = Command(db, "SELECT book_style FROM novels WHERE id = $id", [("$id", novelId)]);
+        return BookStyle.FromJson(cmd.ExecuteScalar() as string);
+    }
+
+    public void SetBookStyle(long novelId, BookStyle? style)
+    {
+        using var db = Open();
+        Execute(db, """
+            UPDATE novels SET book_style = $style,
+                needs_resend = CASE WHEN sent_at IS NOT NULL AND book_style IS NOT $style THEN 1 ELSE needs_resend END
+            WHERE id = $id
+            """, ("$style", style?.Normalized().ToJson()), ("$id", novelId));
+    }
+
+    public void MarkDefaultStyleChanged()
+    {
+        using var db = Open();
+        Execute(db, "UPDATE novels SET needs_resend = 1 WHERE kind = 'novel' AND book_style IS NULL AND sent_at IS NOT NULL");
     }
 
     public LibraryNovel UpsertComic(ComicDetails details)
@@ -301,6 +340,13 @@ public sealed class LibraryStore
             ("$next", nextUrl?.ToString()), ("$novel", novelId), ("$idx", index));
     }
 
+    public StoredChapter? GetFirstChapter(long novelId)
+    {
+        using var db = Open();
+        return QueryChapters(db, "WHERE novel_id = $novel ORDER BY idx LIMIT 1", ("$novel", novelId))
+            .SingleOrDefault();
+    }
+
     public StoredChapter? GetLastChapter(long novelId)
     {
         using var db = Open();
@@ -317,7 +363,7 @@ public sealed class LibraryStore
     public void MarkSent(long novelId, int chapterCount)
     {
         using var db = Open();
-        Execute(db, "UPDATE novels SET sent_chapter_count = $count, sent_at = $now WHERE id = $novel",
+        Execute(db, "UPDATE novels SET sent_chapter_count = $count, sent_at = $now, needs_resend = 0 WHERE id = $novel",
             ("$count", chapterCount), ("$now", Stamp(_time.GetUtcNow())), ("$novel", novelId));
     }
 
@@ -329,7 +375,7 @@ public sealed class LibraryStore
                    (SELECT COUNT(*) FROM chapters c WHERE c.novel_id = n.id)
                      + (SELECT COUNT(*) FROM comic_chapters cc WHERE cc.novel_id = n.id),
                    n.sent_chapter_count, n.added_at, n.updated_at, n.sent_at,
-                   n.kind, n.remote_key, n.source_name, n.right_to_left
+                   n.kind, n.remote_key, n.source_name, n.right_to_left, n.needs_resend
             FROM novels n
             {tail}
             """, args);
@@ -359,7 +405,8 @@ public sealed class LibraryStore
                 Kind: r.GetString(18) == "comic" ? WorkKind.Comic : WorkKind.Novel,
                 RemoteKey: NullableString(r, 19),
                 SourceName: NullableString(r, 20),
-                RightToLeft: r.GetInt64(21) != 0));
+                RightToLeft: r.GetInt64(21) != 0,
+                NeedsResend: r.GetInt64(22) != 0));
         }
         return list;
     }

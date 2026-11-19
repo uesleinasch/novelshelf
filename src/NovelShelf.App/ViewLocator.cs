@@ -14,6 +14,7 @@ public sealed class ViewLocator : IDataTemplate
         KindleViewModel => new KindleView(),
         ComicsViewModel => new ComicsView(),
         ComicLayoutViewModel => new ComicLayoutView(),
+        BookStyleViewModel => new BookStyleView(),
         _ => new TextBlock { Text = $"Sem view para {param?.GetType().Name}" },
     };
 
