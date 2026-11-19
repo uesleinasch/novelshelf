@@ -4,7 +4,7 @@ Leia web novels, **mangás, manhwas, manhuas e HQs** no seu **Kindle**, sem jail
 
 O NovelShelf é um app desktop (Linux e Windows) que busca obras na web, baixa os capítulos para uma biblioteca no seu PC, monta **um livro por obra** e envia o livro para o Kindle pelo cabo USB. Quando saem capítulos novos, você baixa e reenvia: o livro no Kindle é **substituído**, sem criar cópias, e a leitura continua de onde parou.
 
-> - **Novels:** [Novel Mania](https://novelmania.com.br).
+> - **Novels:** [Novel Mania](https://novelmania.com.br) e [Illusia](https://illusia.com.br).
 > - **Mangás, manhwas, manhuas e HQs:** mais de 160 sites em português pelas extensões do Mihon mantidas pelo [Project Nox](https://github.com/ProjectNox-org/manga-extensoes). As páginas são cortadas e ajustadas à tela do Kindle.
 
 ---
@@ -162,7 +162,7 @@ Os sites de quadrinhos vêm das **extensões do Mihon** (o leitor de mangá do A
 - **Conexão.** Kindles antigos aparecem como **disco USB**. O Paperwhite de 11ª geração em diante usa **MTP**.
   - **Linux:** os dois funcionam. O MTP passa pelo `gvfs` (`gio`), o mesmo que o GNOME Arquivos usa. Se o Kindle não for encontrado, abra-o uma vez no gerenciador de arquivos e clique em **Procurar Kindle**.
   - **Windows:** hoje só disco USB. MTP no Windows está no [roadmap](#roadmap).
-- **Substituição.** O arquivo no Kindle tem nome fixo por novel (`novelmania-<slug>.azw3`) e o mesmo ASIN em todas as versões, então reenviar troca o livro em vez de duplicar.
+- **Substituição.** O arquivo no Kindle tem nome fixo por novel (`<fonte>-<slug>.azw3`, por exemplo `novelmania-overgeared.azw3`) e o mesmo ASIN em todas as versões, então reenviar troca o livro em vez de duplicar.
 - **Capa.** Livros copiados pelo cabo não ganham capa da Amazon. O app grava a miniatura em `system/thumbnails/thumbnail_<ASIN>_EBOK_portrait.jpg`, o mesmo truque do Calibre. Se a pasta não estiver acessível (alguns modelos em MTP), o livro funciona normalmente, só que sem capa na grade.
 
 ## Arquitetura
@@ -173,6 +173,7 @@ Solução .NET 10 em C#, com interface em [Avalonia](https://avaloniaui.net) e [
 src/
 ├── NovelShelf.Core                 contratos, biblioteca SQLite, download, exportação
 ├── NovelShelf.Sources.NovelMania   fonte do Novel Mania
+├── NovelShelf.Sources.Illusia      fonte do Illusia
 ├── NovelShelf.Ebook                escritores de EPUB 3 e AZW3 (KF8), sem dependências
 ├── NovelShelf.Comics               ajuste das páginas ao Kindle (SkiaSharp) e AZW3 de layout fixo
 ├── NovelShelf.Suwayomi             instala, sobe e conversa com o servidor de extensões do Mihon
@@ -209,6 +210,15 @@ tests/
 - Dados da novel vêm do JSON-LD (`schema.org/Book`) da página.
 - O texto do capítulo vem de `.rich-text-content`, e o próximo capítulo do `<link rel="next">`.
 - Há um intervalo de 1,5 s entre requisições.
+
+### Fonte Illusia
+
+- O site é WordPress com o tema Fictioneer. O `robots.txt` libera navegadores comuns e bloqueia só robôs de IA; o app lê apenas as páginas HTML públicas.
+- A busca usa a pesquisa do site filtrada por histórias (`/?s=<termo>&post_type=fcn_story`).
+- A página da história traz a lista completa de capítulos; o primeiro da lista é o ponto de partida.
+- O texto vem de `#chapter-content`, e o próximo capítulo do botão "próximo" da navegação. As notas de rodapé do tradutor viram uma lista no fim do capítulo.
+- Capítulos protegidos por senha não são baixados; o download para com um aviso.
+- As capas são WebP; o app converte para JPEG antes de montar o livro.
 
 ### Escritor AZW3
 
@@ -252,10 +262,10 @@ NOVELSHELF_SUWAYOMI_ROOT=/tmp/suwayomi NOVELSHELF_DUMP_DIR=/tmp/azw3 dotnet test
 ## Uso responsável
 
 - O app é para **leitura pessoal**. Não redistribua os livros gerados: as traduções pertencem às equipes dos sites.
-- Apoie os tradutores. O Novel Mania aceita doações pelo [tipa.ai](https://tipa.ai/novelmania).
+- Apoie os tradutores. O Novel Mania aceita doações pelo [tipa.ai](https://tipa.ai/novelmania), e o Illusia tem página de apoio no próprio site.
 - Nos quadrinhos, apoie as scans e as editoras oficiais. As extensões são da comunidade Project Nox. O NovelShelf não distribui extensões; você escolhe e instala as que quiser.
 - O app respeita o `robots.txt` e espaça as requisições para não sobrecarregar o site. Não reduza esse intervalo.
-- Este projeto não é afiliado ao Novel Mania nem à Amazon. Kindle é marca da Amazon.
+- Este projeto não é afiliado ao Novel Mania, ao Illusia nem à Amazon. Kindle é marca da Amazon.
 
 ## Limitações conhecidas
 
