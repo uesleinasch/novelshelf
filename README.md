@@ -1,10 +1,11 @@
 # NovelShelf
 
-Leia web novels no seu **Kindle**, sem jailbreak, sem servidor e sem Calibre.
+Leia web novels, **mangás, manhwas, manhuas e HQs** no seu **Kindle**, sem jailbreak, sem servidor na nuvem e sem Calibre.
 
-O NovelShelf é um app desktop (Linux e Windows) que busca novels na web, baixa os capítulos para uma biblioteca no seu PC, monta **um livro por novel** e envia o livro para o Kindle pelo cabo USB. Quando saem capítulos novos, você baixa e reenvia: o livro no Kindle é **substituído**, sem criar cópias, e a leitura continua de onde parou.
+O NovelShelf é um app desktop (Linux e Windows) que busca obras na web, baixa os capítulos para uma biblioteca no seu PC, monta **um livro por obra** e envia o livro para o Kindle pelo cabo USB. Quando saem capítulos novos, você baixa e reenvia: o livro no Kindle é **substituído**, sem criar cópias, e a leitura continua de onde parou.
 
-> Site suportado hoje: [Novel Mania](https://novelmania.com.br). A arquitetura já está pronta para receber outros sites.
+> - **Novels:** [Novel Mania](https://novelmania.com.br).
+> - **Mangás, manhwas, manhuas e HQs:** mais de 160 sites em português pelas extensões do Mihon mantidas pelo [Project Nox](https://github.com/ProjectNox-org/manga-extensoes). As páginas são cortadas e ajustadas à tela do Kindle.
 
 ---
 
@@ -14,6 +15,7 @@ O NovelShelf é um app desktop (Linux e Windows) que busca novels na web, baixa 
 - [Como funciona](#como-funciona)
 - [Instalação](#instalação)
 - [Uso](#uso)
+- [Mangás, manhwas e HQs](#mangás-manhwas-e-hqs)
 - [Kindle: detalhes importantes](#kindle-detalhes-importantes)
 - [Arquitetura](#arquitetura)
 - [Rodar a partir do código](#rodar-a-partir-do-código)
@@ -86,7 +88,59 @@ O botão **Gerar livro** cria o EPUB e o AZW3 sem enviar, para usar em outros le
 | Linux | `~/.local/share/NovelShelf/` |
 | Windows | `%LOCALAPPDATA%\NovelShelf\` |
 
-Dentro dela: `library.db` (biblioteca), `books/` (EPUB e AZW3 gerados) e `covers/` (capas).
+Dentro dela:
+
+| Item | O que guarda |
+|---|---|
+| `library.db` | a biblioteca |
+| `books/` | EPUB e AZW3 gerados |
+| `covers/` | capas |
+| `comics/` | páginas originais dos quadrinhos baixados |
+| `suwayomi/` | Java, servidor de mangás e as extensões instaladas |
+| `settings.json` | modelo do Kindle e preferências |
+
+## Mangás, manhwas e HQs
+
+Os sites de quadrinhos vêm das **extensões do Mihon** (o leitor de mangá do Android) mantidas pela comunidade [Project Nox](https://github.com/ProjectNox-org/manga-extensoes): mais de 160 fontes em português. O NovelShelf não reescreve essas fontes. Ele roda as extensões originais num servidor local, o [Suwayomi-Server](https://github.com/Suwayomi/Suwayomi-Server), e conversa com ele por uma API.
+
+```
+ Site ──▶ extensão do Mihon ──▶ Suwayomi (local, 127.0.0.1) ──GraphQL──▶ NovelShelf
+                                                                          │
+                                         corta, divide e ajusta as páginas │
+                                                                          ▼
+                                                     AZW3 de layout fixo ──▶ Kindle
+```
+
+### Como usar
+
+1. Abra **Mangás e HQs** e clique em **Baixar e ativar**. Isso só acontece uma vez.
+   - O app baixa o Java 21 (Temurin) e o Suwayomi, cerca de 235 MB, e confere o SHA-256 de cada arquivo.
+2. Clique em **Fontes** e instale os sites que você usa. A lista mostra fontes em português.
+   - Fontes só para adultos ficam escondidas até você marcar **Mostrar fontes adultas (+18)**.
+3. Escolha a fonte e use **Buscar**, **Explorar** (populares) ou **Novidades**. A consulta vai ao site na hora.
+4. Clique numa obra e em **Adicionar à biblioteca**.
+5. Na **Biblioteca**:
+   1. Use **Baixar** para trazer as páginas dos próximos capítulos para o PC.
+   2. Use **Converter** para gerar o AZW3.
+   3. Use **Enviar** para mandar ao Kindle.
+6. Em mangá japonês, ligue **Leitura da direita para a esquerda**.
+
+### O servidor de mangás
+
+- Ele sobe sozinho quando o NovelShelf abre (se o suporte a mangás estiver ativado) e fecha quando o app fecha.
+- Ele escuta só em `127.0.0.1`, numa porta livre escolhida a cada abertura. Não tem interface web nem ícone na bandeja.
+- Se o NovelShelf travar ou for morto, o servidor também morre:
+  - **Linux:** um vigia ligado ao app encerra o Java quando o app some.
+  - **Windows:** um *Job Object* faz o mesmo.
+- Ele usa cerca de 500 MB de RAM enquanto o app está aberto.
+
+### Como as páginas são ajustadas ao Kindle
+
+- **Corte de margens:** bordas brancas ou pretas uniformes saem, e o conteúdo ganha zoom.
+- **Páginas duplas** (mais largas que altas) viram duas, na ordem de leitura. Com a leitura da direita para a esquerda ligada, a metade direita vem primeiro.
+- **Webtoon** (manhwa/manhua em tira longa): a tira é juntada e fatiada no tamanho exato da tela. O corte procura uma faixa lisa entre quadros para não partir balões, e fatias totalmente em branco são descartadas.
+- **Ajuste à tela:** cada página fica com o tamanho exato do modelo escolhido na página **Kindle** (padrão: Paperwhite 11ª/12ª geração, 1236×1648). As páginas saem em tons de cinza (colorido só no perfil Colorsoft).
+- **Formato:** o livro é um AZW3 de layout fixo (uma imagem por página, sumário por capítulo). Ele usa o mesmo ASIN e o mesmo nome de arquivo (`hq-<obra>.azw3`), então reenviar substitui o livro.
 
 ## Kindle: detalhes importantes
 
@@ -106,11 +160,13 @@ src/
 ├── NovelShelf.Core                 contratos, biblioteca SQLite, download, exportação
 ├── NovelShelf.Sources.NovelMania   fonte do Novel Mania
 ├── NovelShelf.Ebook                escritores de EPUB 3 e AZW3 (KF8), sem dependências
+├── NovelShelf.Comics               ajuste das páginas ao Kindle (SkiaSharp) e AZW3 de layout fixo
+├── NovelShelf.Suwayomi             instala, sobe e conversa com o servidor de extensões do Mihon
 ├── NovelShelf.Devices              detecção do Kindle e envio (disco e MTP)
 └── NovelShelf.App                  interface (Avalonia + FluentAvalonia, MVVM)
 tests/
-├── NovelShelf.Tests                fontes, biblioteca, download, dispositivos
-└── NovelShelf.Ebook.Tests          EPUB e AZW3 (inclui um leitor KF8 para validar a estrutura)
+├── NovelShelf.Tests                fontes, biblioteca, quadrinhos, Suwayomi, dispositivos
+└── NovelShelf.Ebook.Tests          EPUB, AZW3 e páginas de quadrinho (inclui um leitor KF8 para validar a estrutura)
 ```
 
 ### Peças principais
@@ -126,6 +182,12 @@ tests/
 | `EpubWriter` | EPUB 3 com sumário (`nav` + `ncx`) e saída determinística. |
 | `MobiBook` | Escritor AZW3/KF8: PalmDB, cabeçalhos MOBI/EXTH, esqueleto e fragmentos, NCX, FDST e capa. |
 | `KindleLocator` / `KindleSender` | Acham o Kindle (disco ou MTP via `gio`) e copiam o livro, substituindo o anterior. |
+| `IComicProvider` | Contrato de quadrinhos: fontes, explorar/buscar, detalhes, capítulos e páginas. |
+| `SuwayomiInstaller` / `SuwayomiServer` | Baixam Java e Suwayomi com checksum fixo, sobem o servidor em `127.0.0.1` e o encerram junto com o app. |
+| `SuwayomiClient` | Cliente GraphQL do Suwayomi: repositório do Project Nox, extensões e implementação do `IComicProvider`. |
+| `ComicDownloader` | Baixa as páginas dos próximos capítulos para `comics/`. |
+| `ComicPageProcessor` | Corta margens, divide páginas duplas, fatia webtoons e ajusta ao tamanho da tela. |
+| `ComicBookBuilder` / `ComicExporter` | Montam o AZW3 de layout fixo com uma imagem por página. |
 
 ### Fonte Novel Mania
 
@@ -167,12 +229,17 @@ Testes:
 dotnet test                                 # unitários
 NOVELSHELF_LIVE=1 dotnet test               # inclui teste contra o site real
 NOVELSHELF_DUMP_DIR=/tmp/azw3 dotnet test   # grava AZW3 de exemplo para inspecionar
+
+# servidor de mangás de verdade: instala na pasta (se preciso), baixa um capítulo
+# do HQ Now! e do Akaito, converte e grava os AZW3 e amostras das páginas
+NOVELSHELF_SUWAYOMI_ROOT=/tmp/suwayomi NOVELSHELF_DUMP_DIR=/tmp/azw3 dotnet test
 ```
 
 ## Uso responsável
 
 - O app é para **leitura pessoal**. Não redistribua os livros gerados: as traduções pertencem às equipes dos sites.
 - Apoie os tradutores. O Novel Mania aceita doações pelo [tipa.ai](https://tipa.ai/novelmania).
+- Nos quadrinhos, apoie as scans e as editoras oficiais. As extensões são da comunidade Project Nox. O NovelShelf não distribui extensões; você escolhe e instala as que quiser.
 - O app respeita o `robots.txt` e espaça as requisições para não sobrecarregar o site. Não reduza esse intervalo.
 - Este projeto não é afiliado ao Novel Mania nem à Amazon. Kindle é marca da Amazon.
 
@@ -181,13 +248,21 @@ NOVELSHELF_DUMP_DIR=/tmp/azw3 dotnet test   # grava AZW3 de exemplo para inspeci
 - **Windows + Kindle em MTP** (Paperwhite 11ª geração em diante) ainda não é suportado. No Windows, só Kindles que aparecem como unidade de disco.
 - O AZW3 ainda não foi testado em todos os modelos de Kindle. Se algo aparecer errado, abra uma issue com o modelo e a versão do firmware.
 - O texto vai sem compressão PalmDoc. O arquivo fica maior, mas a leitura não muda.
-- Imagens dentro dos capítulos são descartadas. Só a capa é usada.
+- Imagens dentro dos capítulos de novel são descartadas. Só a capa é usada.
+- Quadrinhos:
+  - Cada obra vira **um** AZW3 com todos os capítulos baixados. Séries muito longas geram arquivos grandes, e a conversão refaz todas as páginas a cada envio.
+  - Sites que exigem login ou que passam pelo Cloudflare podem não funcionar, porque o WebView do Suwayomi fica desligado.
+  - O controle do servidor no Windows (Job Object) foi escrito, mas ainda não foi testado num Windows real.
 
 ## Roadmap
 
 - [ ] MTP no Windows (WPD)
 - [ ] Mais sites de novels
-- [ ] Opção de dividir novels muito longas em volumes
+- [ ] Opção de dividir novels e quadrinhos muito longos em volumes
+- [ ] Guardar as páginas já convertidas para acelerar reenvios
+- [ ] Login e Cloudflare nas fontes de quadrinhos
+- [ ] Alternar lista e grade e filtros na biblioteca
+- [ ] Novel: suporte ao [Illusia](https://illusia.com.br)
 - [ ] Compressão PalmDoc no AZW3
 - [ ] Atualização automática ("baixar capítulos novos de todas as novels")
 
@@ -199,4 +274,6 @@ Veja o [CONTRIBUTING.md](CONTRIBUTING.md), que traz o fluxo de branches (`main` 
 
 - Código sob licença [MIT](LICENSE).
 - Escritor AZW3 baseado em [leotaku/mobi](https://github.com/leotaku/mobi) (MIT). Detalhes em [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+- Página de quadrinho no AZW3 inspirada no [kojirou](https://github.com/leotaku/kojirou) (MIT).
+- O suporte a mangás baixa, na hora da ativação, o [Suwayomi-Server](https://github.com/Suwayomi/Suwayomi-Server) (MPL-2.0) e o [Eclipse Temurin](https://adoptium.net) 21 (GPLv2 com Classpath Exception). As extensões do [Project Nox](https://github.com/ProjectNox-org/manga-extensoes) (AGPL-3.0) rodam dentro do Suwayomi, em outro processo.
 - Referências do formato: [MobileRead Wiki (MOBI/KF8)](https://wiki.mobileread.com/wiki/KF8) e o código do [Calibre](https://github.com/kovidgoyal/calibre).

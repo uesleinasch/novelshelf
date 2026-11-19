@@ -21,7 +21,7 @@ feat(app): ...
 chore(release): v0.2.0
 ```
 
-Escopos usados: `core`, `novelmania`, `ebook`, `devices`, `app`, `ci`, `release`.
+Escopos usados: `core`, `novelmania`, `ebook`, `comics`, `suwayomi`, `devices`, `app`, `ci`, `release`, `test`.
 
 ## Dia a dia
 
@@ -66,3 +66,14 @@ Acompanhar: `gh run watch` e `gh release view v0.2.0`.
 3. Devolva o capítulo já limpo com `ChapterHtmlSanitizer.ToXhtml`.
 4. Registre a fonte em `src/NovelShelf.App/Services/AppServices.cs`.
 5. Testes de parsing com HTML sintético em `tests/NovelShelf.Tests/Sources` e, se quiser, um teste ao vivo protegido por `NOVELSHELF_LIVE=1`.
+
+### Sites de quadrinhos
+
+Sites de mangá, manhwa, manhua e HQ **não** são escritos aqui. Eles vêm das extensões do Mihon do [Project Nox](https://github.com/ProjectNox-org/manga-extensoes), que rodam dentro do Suwayomi. Se um site quebrar ou faltar, o conserto vai para o Project Nox.
+
+Para trocar a versão do Suwayomi ou do Java, atualize `src/NovelShelf.Suwayomi/SuwayomiRelease.cs`:
+- URL;
+- SHA-256 tirado do `Checksums.sha256` do release ou da API do Adoptium;
+- tamanho aproximado.
+
+Depois rode o teste ao vivo com `NOVELSHELF_SUWAYOMI_ROOT` apontando para uma pasta vazia.
