@@ -1,3 +1,5 @@
+using NovelShelf.Core.Net;
+
 namespace NovelShelf.Core.Downloading;
 
 public enum DownloadState
@@ -17,7 +19,8 @@ public sealed record DownloadJob(
     int Done = 0,
     DownloadState State = DownloadState.Queued,
     string? Detail = null,
-    bool ReachedEnd = false)
+    bool ReachedEnd = false,
+    DateTimeOffset? RetryAt = null)
 {
     public int Remaining => Math.Max(0, Requested - Done);
     public bool IsPending => State is DownloadState.Queued or DownloadState.Running or DownloadState.Paused;
@@ -26,8 +29,11 @@ public sealed record DownloadJob(
 public delegate Task<DownloadResult> DownloadWork(
     DownloadJob job, int count, IProgress<DownloadProgress> progress, CancellationToken ct);
 
-public sealed class DownloadQueue(DownloadWork work)
+public sealed class DownloadQueue(DownloadWork work, TimeProvider? time = null)
 {
+    private readonly TimeProvider _time = time ?? TimeProvider.System;
+    private readonly Dictionary<string, DateTimeOffset> _laneCooldown = [];
+
     private sealed class Entry(DownloadJob job)
     {
         public DownloadJob Job = job;
@@ -176,6 +182,18 @@ public sealed class DownloadQueue(DownloadWork work)
         }
     }
 
+    public void Annotate(string lane, string? detail)
+    {
+        lock (_gate)
+        {
+            var running = _entries.FirstOrDefault(e => e.Job.Lane == lane && e.Job.State == DownloadState.Running);
+            if (running is null)
+                return;
+            running.Job = running.Job with { Detail = detail };
+        }
+        Notify();
+    }
+
     private Entry? Get(long novelId) => _entries.FirstOrDefault(e => e.Job.NovelId == novelId);
 
     private static void PauseLocked(Entry? entry)
@@ -207,7 +225,11 @@ public sealed class DownloadQueue(DownloadWork work)
     {
         lock (_gate)
         {
-            var busy = _entries.Where(e => e.Job.State == DownloadState.Running).Select(e => e.Job.Lane).ToHashSet();
+            var now = _time.GetUtcNow();
+            foreach (var expired in _laneCooldown.Where(c => c.Value <= now).Select(c => c.Key).ToList())
+                _laneCooldown.Remove(expired);
+            var busy = _entries.Where(e => e.Job.State == DownloadState.Running).Select(e => e.Job.Lane)
+                .Concat(_laneCooldown.Keys).ToHashSet();
             foreach (var entry in _entries)
             {
                 if (entry.Job.State != DownloadState.Queued || !busy.Add(entry.Job.Lane))
@@ -218,7 +240,7 @@ public sealed class DownloadQueue(DownloadWork work)
                     busy.Remove(entry.Job.Lane);
                     continue;
                 }
-                entry.Job = entry.Job with { State = DownloadState.Running, Detail = null };
+                entry.Job = entry.Job with { State = DownloadState.Running, Detail = null, RetryAt = null };
                 entry.PauseRequested = false;
                 entry.Cancel = new CancellationTokenSource();
                 entry.Run = RunAsync(entry, entry.Job, entry.Cancel.Token);
@@ -256,6 +278,16 @@ public sealed class DownloadQueue(DownloadWork work)
                         : j with { Done = done, State = DownloadState.Queued };
                 });
         }
+        catch (RateLimitedException e)
+        {
+            lock (_gate)
+            {
+                Finish(j => j with { State = entry.PauseRequested ? DownloadState.Paused : DownloadState.Queued, Detail = e.Message, RetryAt = e.RetryAt });
+                if (!_laneCooldown.TryGetValue(job.Lane, out var current) || current < e.RetryAt)
+                    _laneCooldown[job.Lane] = e.RetryAt;
+            }
+            _ = WakeAtAsync(e.RetryAt);
+        }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             lock (_gate)
@@ -275,6 +307,13 @@ public sealed class DownloadQueue(DownloadWork work)
                 entry.PauseRequested = false;
             }
         }
+        Pump();
+    }
+
+    private async Task WakeAtAsync(DateTimeOffset at)
+    {
+        for (var wait = at - _time.GetUtcNow(); wait > TimeSpan.Zero; wait = at - _time.GetUtcNow())
+            await Task.Delay(wait + TimeSpan.FromMilliseconds(5), _time);
         Pump();
     }
 
