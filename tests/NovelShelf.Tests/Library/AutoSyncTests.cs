@@ -95,7 +95,7 @@ public sealed class AutoSyncTests
     }
 
     [Fact]
-    public void Upgrade_marks_works_already_downloaded_to_the_end_as_caught_up()
+    public void Upgrade_does_not_trust_the_site_chapter_count_for_caught_up()
     {
         var dir = Directory.CreateTempSubdirectory("novelshelf-sync-").FullName;
         var db = Path.Combine(dir, "library.db");
@@ -123,7 +123,7 @@ public sealed class AutoSyncTests
             }
 
             var upgraded = new LibraryStore(db);
-            Assert.True(upgraded.GetNovel(complete.Id)!.CaughtUp);
+            Assert.False(upgraded.GetNovel(complete.Id)!.CaughtUp);
             Assert.False(upgraded.GetNovel(partial.Id)!.CaughtUp);
         }
         finally
