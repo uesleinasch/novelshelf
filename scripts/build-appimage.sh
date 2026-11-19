@@ -7,6 +7,11 @@ out="${OUT_DIR:-$root/artifacts}"
 work="$out/appimage"
 appdir="$work/NovelShelf.AppDir"
 runtime="${APPIMAGE_RUNTIME:-}"
+label="${APPIMAGE_LABEL-}"
+if [ -z "${APPIMAGE_LABEL+set}" ] && [ -z "${GITHUB_ACTIONS:-}" ]; then
+  label="$(git -C "$root" rev-parse --short HEAD)"
+  git -C "$root" diff --quiet HEAD || label="$label-$(date +%H%M%S)"
+fi
 
 rm -rf "$work"
 mkdir -p "$appdir/usr/lib/novelshelf" "$appdir/usr/share/applications" "$appdir/usr/share/icons/hicolor/scalable/apps"
@@ -33,7 +38,7 @@ if [ -z "$runtime" ]; then
 fi
 
 mksquashfs "$appdir" "$work/app.squashfs" -root-owned -noappend -comp zstd -quiet
-target="$out/NovelShelf-v$version-x86_64.AppImage"
+target="$out/NovelShelf-v$version${label:+-$label}-x86_64.AppImage"
 cat "$runtime" "$work/app.squashfs" > "$target"
 chmod +x "$target"
 echo "$target"
