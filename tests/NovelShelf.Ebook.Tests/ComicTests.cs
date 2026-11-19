@@ -249,13 +249,18 @@ public sealed class ComicTests
         var reader = new Kf8Reader(ms.ToArray());
 
         Assert.Equal("true", reader.ExthString(122));
-        Assert.Equal("1236x1648", reader.ExthString(307));
+        Assert.Equal("1236x1648", reader.ExthString(126));
+        Assert.Equal("comic", reader.ExthString(123));
+        Assert.Equal("true", reader.ExthString(128));
+        Assert.Equal("true", reader.ExthString(127));
+        Assert.Equal("portrait", reader.ExthString(124));
+        Assert.Empty(reader.Exth[307]);
         Assert.Equal("rtl", reader.ExthString(527));
         Assert.Equal("6", reader.Exth[125].Single().Aggregate(0, (n, b) => n << 8 | b).ToString());
 
         var parts = reader.RebuildParts();
         Assert.Equal(5, parts.Count);
-        Assert.Contains("kindle:embed:0001?mime=image/jpeg", parts[0]);
+        Assert.Contains("kindle:embed:0001?mime=image/jpeg\" width=\"1236\" height=\"1648\"", parts[0]);
         Assert.Contains("kindle:embed:0005?mime=image/jpeg", parts[4]);
         Assert.All(parts, p => Assert.Contains("<meta name=\"viewport\" content=\"width=1236, height=1648\"/>", p));
 

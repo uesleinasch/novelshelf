@@ -4,12 +4,8 @@ public sealed record KindleProfile(string Id, string Name, int Width, int Height
 {
     public static IReadOnlyList<KindleProfile> All { get; } =
     [
-        new("pw5", "Kindle Paperwhite (11ª e 12ª geração)", 1236, 1648),
-        new("pw3", "Kindle Paperwhite (7ª a 10ª geração)", 1072, 1448),
-        new("basic", "Kindle (2022 em diante)", 1072, 1448),
-        new("oasis", "Kindle Oasis", 1264, 1680),
-        new("scribe", "Kindle Scribe", 1860, 2480),
-        new("colorsoft", "Kindle Colorsoft", 1264, 1680, Color: true),
+        new("pw5", "Kindle Paperwhite 11ª/12ª geração (6,8\", 1236×1648)", 1236, 1648),
+        new("basic", "Kindle 11ª geração (6\", 1072×1448)", 1072, 1448),
     ];
 
     public static KindleProfile Default => All[0];

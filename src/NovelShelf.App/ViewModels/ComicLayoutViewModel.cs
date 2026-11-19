@@ -34,6 +34,22 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
 
     public string Title => _comic.Title;
     public string ProfileName => _services.KindleProfile.Name;
+    public IReadOnlyList<KindleProfile> Profiles => KindleProfile.All;
+
+    public KindleProfile Profile
+    {
+        get => _services.KindleProfile;
+        set
+        {
+            if (value is null || value.Id == _services.Settings.KindleProfile)
+                return;
+            _services.Settings.KindleProfile = value.Id;
+            _services.Settings.Save();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(ProfileName));
+            HasPendingChanges = true;
+        }
+    }
     public ObservableCollection<StoredComicChapter> Chapters { get; } = [];
     public bool HasChapters => Chapters.Count > 0;
 

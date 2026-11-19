@@ -27,6 +27,7 @@ public sealed class MobiBook
     public bool RightToLeft { get; init; }
     public bool Vertical { get; init; }
     public (int Width, int Height)? OriginalResolution { get; init; }
+    public bool Comic { get; init; }
     public IReadOnlyList<MobiChapter> Chapters { get; init; } = [];
     public IReadOnlyList<string> CssFlows { get; init; } = [];
     public IReadOnlyList<byte[]> Images { get; init; } = [];
@@ -140,6 +141,14 @@ public sealed class MobiBook
             exth.AddString(ExthType.FixedLayout, "true");
         if (OriginalResolution is { } resolution)
             exth.AddString(ExthType.OriginalResolution, $"{resolution.Width}x{resolution.Height}");
+        if (Comic)
+        {
+            exth.AddString(ExthType.BookType, "comic");
+            exth.AddString(ExthType.OrientationLock, "portrait");
+            exth.AddString(ExthType.ZeroGutter, "true");
+            exth.AddString(ExthType.ZeroMargin, "true");
+            exth.AddString(ExthType.RegionMagnification, "false");
+        }
         if (RightToLeft)
         {
             exth.AddString(ExthType.PrimaryWritingMode, Vertical ? "vertical-rl" : "horizontal-rl");

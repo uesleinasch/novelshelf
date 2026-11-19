@@ -17,9 +17,9 @@ public static class ComicBookBuilder
 {
     private const string PageCss = """
         @page { margin: 0; }
-        body { margin: 0; padding: 0; }
+        html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
         div { display: none; }
-        img { display: block; width: 100%; height: 100%; margin: 0; padding: 0; }
+        img { display: block; position: absolute; top: 0; left: 0; width: 100%; height: 100%; margin: 0; padding: 0; }
         """;
 
     public static MobiBook Build(ComicBookInfo info, IReadOnlyList<ComicChapter> chapters, KindleProfile profile, bool rightToLeft)
@@ -33,7 +33,7 @@ public static class ComicBookBuilder
             var chunks = new List<string>(chapter.Pages.Count);
             foreach (var page in chapter.Pages)
             {
-                chunks.Add($"<div>.</div><img src=\"{MobiBook.EmbedUri(images.Count)}\" alt=\"\"/>");
+                chunks.Add($"<div>.</div><img src=\"{MobiBook.EmbedUri(images.Count)}\" width=\"{profile.Width}\" height=\"{profile.Height}\" alt=\"\"/>");
                 images.Add(page);
             }
             mobiChapters.Add(new MobiChapter(chapter.Title, chunks));
@@ -52,6 +52,7 @@ public static class ComicBookBuilder
             FixedLayout = true,
             RightToLeft = rightToLeft,
             OriginalResolution = (profile.Width, profile.Height),
+            Comic = true,
             CssFlows = [PageCss],
             Images = images,
             CoverImage = info.CoverJpeg ?? images[0],

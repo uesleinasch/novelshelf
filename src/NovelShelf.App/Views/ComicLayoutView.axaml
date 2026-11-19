@@ -58,6 +58,13 @@
                 </TextBlock>
 
                 <StackPanel Spacing="6">
+                    <TextBlock Text="Modelo do Kindle" FontWeight="SemiBold" />
+                    <ComboBox ItemsSource="{Binding Profiles}" SelectedItem="{Binding Profile}" HorizontalAlignment="Stretch" />
+                    <TextBlock Text="Escolha o modelo que você vai conectar. As páginas são geradas no tamanho exato da tela dele. Vale para todas as obras."
+                               FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel Spacing="6">
                     <TextBlock Text="Formato" FontWeight="SemiBold" />
                     <ComboBox SelectedIndex="{Binding ModeIndex}" HorizontalAlignment="Stretch">
                         <ComboBoxItem Content="Automático" />

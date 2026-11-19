@@ -142,7 +142,10 @@ Os sites de quadrinhos vêm das **extensões do Mihon** (o leitor de mangá do A
 - **Corte de margens:** bordas brancas ou pretas uniformes saem, e o conteúdo ganha zoom.
 - **Páginas duplas** (mais largas que altas) viram duas, na ordem de leitura. Com a leitura da direita para a esquerda ligada, a metade direita vem primeiro.
 - **Webtoon** (manhwa/manhua em tira longa): a tira é juntada e fatiada no tamanho exato da tela. O corte procura uma faixa lisa entre quadros para não partir balões, e fatias totalmente em branco são descartadas.
-- **Ajuste à tela:** cada página fica com o tamanho exato do modelo escolhido na página **Kindle** (padrão: Paperwhite 11ª/12ª geração, 1236×1648). As páginas saem em tons de cinza (colorido só no perfil Colorsoft).
+- **Ajuste à tela:** cada página fica com o tamanho exato do modelo escolhido, na página **Kindle** ou em **Ajustar corte**. As páginas saem em tons de cinza.
+  - Kindle 11ª geração (6", 1072×1448).
+  - Kindle Paperwhite 11ª/12ª geração (6,8", 1236×1648).
+- **Marcado como quadrinho:** o AZW3 informa ao Kindle que é quadrinho, sem margem e em retrato, com a resolução da tela. Assim o Kindle mostra a página inteira, sem reservar espaço no topo.
 - **Ajuste por obra:** na biblioteca, **Ajustar corte** abre um preview das telas exatas do Kindle. Lá dá para escolher:
   - formato (páginas ou tira contínua);
   - margens (sozinho, sem corte ou manual, para dar zoom);
