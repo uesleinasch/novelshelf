@@ -19,6 +19,7 @@ public sealed partial class LibraryItemViewModel : ViewModelBase
     public LibraryItemViewModel(LibraryNovel novel, CoverLoader covers, LibraryStore store, LibraryViewModel owner)
     {
         Owner = owner;
+        SiteName = owner.SiteNameFor(novel);
         _novel = novel;
         _store = store;
         _rightToLeft = novel.RightToLeft;
@@ -26,6 +27,7 @@ public sealed partial class LibraryItemViewModel : ViewModelBase
     }
 
     public LibraryViewModel Owner { get; }
+    public string SiteName { get; }
 
     public bool IsComic => Novel.Kind == WorkKind.Comic;
 
@@ -66,8 +68,79 @@ public sealed partial class LibraryItemViewModel : ViewModelBase
 
 public sealed partial class LibraryViewModel(AppServices services, KindleViewModel kindle, Action<long> openLayout) : ViewModelBase
 {
+    private List<LibraryItemViewModel> _all = [];
+    private bool _rebuildingSites;
+
     public ObservableCollection<LibraryItemViewModel> Novels { get; } = [];
     public KindleViewModel Kindle => kindle;
+
+    public static IReadOnlyList<Choice<WorkKind?>> KindOptions { get; } =
+    [
+        new("Todos os tipos", null),
+        new("Novels", WorkKind.Novel),
+        new("Mangás e HQs", WorkKind.Comic),
+    ];
+
+    public static IReadOnlyList<Choice<KindleState?>> KindleOptions { get; } =
+    [
+        new("Qualquer situação", null),
+        new("Novos para enviar", KindleState.Pending),
+        new("Kindle em dia", KindleState.UpToDate),
+        new("Nunca enviados", KindleState.NeverSent),
+    ];
+
+    public static IReadOnlyList<Choice<LibrarySort>> SortOptions { get; } =
+    [
+        new("Atualizados", LibrarySort.Updated),
+        new("Título (A–Z)", LibrarySort.Title),
+        new("Adicionados", LibrarySort.Added),
+    ];
+
+    public ObservableCollection<Choice<string?>> SiteOptions { get; } = [new("Todos os sites", null)];
+
+    [ObservableProperty]
+    private Choice<WorkKind?>? _kindFilter = KindOptions[0];
+
+    [ObservableProperty]
+    private Choice<string?>? _siteFilter;
+
+    [ObservableProperty]
+    private Choice<KindleState?>? _kindleFilter = KindleOptions[0];
+
+    [ObservableProperty]
+    private Choice<LibrarySort>? _sortOrder = SortOptions[0];
+
+    [ObservableProperty]
+    private string _searchText = "";
+
+    partial void OnKindFilterChanged(Choice<WorkKind?>? value) => ApplyFilter();
+    partial void OnSiteFilterChanged(Choice<string?>? value)
+    {
+        if (!_rebuildingSites)
+            ApplyFilter();
+    }
+    partial void OnKindleFilterChanged(Choice<KindleState?>? value) => ApplyFilter();
+    partial void OnSortOrderChanged(Choice<LibrarySort>? value) => ApplyFilter();
+    partial void OnSearchTextChanged(string value) => ApplyFilter();
+
+    private LibraryFilter CurrentFilter => new(KindFilter?.Value, SiteFilter?.Value, KindleFilter?.Value, SearchText,
+        SortOrder?.Value ?? LibrarySort.Updated);
+
+    public bool IsFiltered => CurrentFilter.IsActive;
+    public bool HasNoMatches => _all.Count > 0 && Novels.Count == 0;
+
+    [RelayCommand]
+    private void ClearFilters()
+    {
+        KindFilter = KindOptions[0];
+        SiteFilter = SiteOptions[0];
+        KindleFilter = KindleOptions[0];
+        SearchText = "";
+    }
+
+    public string SiteNameFor(LibraryNovel novel) => novel.Kind == WorkKind.Comic
+        ? novel.SourceName ?? novel.SourceId
+        : services.Sources.All.FirstOrDefault(s => s.Id == novel.SourceId)?.Name ?? novel.SourceId;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection), nameof(DownloadDescription), nameof(ExportHeader), nameof(ExportDescription), nameof(ExportButton))]
@@ -125,16 +198,50 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
     private bool _statusIsError;
 
     public bool HasSelection => Selected is not null;
-    public bool HasNovels => Novels.Count > 0;
+    public bool HasNovels => _all.Count > 0;
 
     public void Reload(long? select = null)
     {
         var keep = select ?? Selected?.Novel.Id;
-        Novels.Clear();
-        foreach (var novel in services.Library.GetNovels())
-            Novels.Add(new LibraryItemViewModel(novel, services.Covers, services.Library, this));
-        Selected = Novels.FirstOrDefault(n => n.Novel.Id == keep) ?? Novels.FirstOrDefault();
+        _all = services.Library.GetNovels()
+            .Select(novel => new LibraryItemViewModel(novel, services.Covers, services.Library, this))
+            .ToList();
+        RebuildSites();
+        if (select is not null && _all.FirstOrDefault(n => n.Novel.Id == select) is { } wanted
+            && CurrentFilter.Apply([wanted], i => i.Novel, i => i.SiteName).Count == 0)
+            ClearFilters();
+        ApplyFilter(keep);
         OnPropertyChanged(nameof(HasNovels));
+    }
+
+    private void RebuildSites()
+    {
+        var current = SiteFilter?.Value;
+        _rebuildingSites = true;
+        try
+        {
+            SiteOptions.Clear();
+            SiteOptions.Add(new Choice<string?>("Todos os sites", null));
+            foreach (var site in _all.Select(i => i.SiteName).Distinct(StringComparer.OrdinalIgnoreCase).Order(StringComparer.CurrentCultureIgnoreCase))
+                SiteOptions.Add(new Choice<string?>(site, site));
+            SiteFilter = SiteOptions.FirstOrDefault(o => o.Value == current) ?? SiteOptions[0];
+        }
+        finally
+        {
+            _rebuildingSites = false;
+        }
+    }
+
+    private void ApplyFilter(long? keep = null)
+    {
+        keep ??= Selected?.Novel.Id;
+        var visible = CurrentFilter.Apply(_all, i => i.Novel, i => i.SiteName);
+        Novels.Clear();
+        foreach (var item in visible)
+            Novels.Add(item);
+        Selected = Novels.FirstOrDefault(n => n.Novel.Id == keep) ?? Novels.FirstOrDefault();
+        OnPropertyChanged(nameof(HasNoMatches));
+        OnPropertyChanged(nameof(IsFiltered));
     }
 
     private bool CanAct() => Selected is not null && !IsBusy;
