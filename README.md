@@ -85,6 +85,8 @@ Acima da lista ficam a busca por título ou autor e os filtros: tipo (novel ou q
 
 **Downloads.** O botão **Baixar** põe a obra na fila e você pode continuar usando o app. Acompanhe tudo na página **Downloads**: progresso de cada obra, pausar, retomar, tirar da fila e mudar a ordem. Obras do mesmo site baixam uma de cada vez, para não sobrecarregar o site; sites diferentes baixam ao mesmo tempo. Se você fechar o app no meio, a fila volta sozinha na próxima vez.
 
+**Atualização automática.** Ao abrir o app (e, se quiser, a cada 1 a 24 horas), o NovelShelf procura capítulos novos das obras que você já baixou até o último capítulo e põe na fila. Quando chegam capítulos novos, aparece um aviso no app e uma notificação do sistema no Linux. Também dá para buscar na hora: botão **Buscar capítulos novos** na Biblioteca. Na página **Kindle**, ligue **Enviar ao conectar o Kindle** e, ao plugar o cabo, o app baixa o que saiu e envia todas as obras com novidades; depois é só ejetar. Mangás e HQs entram na atualização só se você ligar a opção, porque baixam muito mais dados.
+
 **Estilo do livro.** Na página **Kindle**, em *Estilo dos livros*, você ajusta o recuo da primeira linha, o espaço entre parágrafos, o alinhamento (justificado ou à esquerda) e o título dos capítulos (como no site, só "Capítulo N" ou sem título). A prévia mostra o resultado na hora. Cada novel pode ter um estilo próprio: botão **Estilo do livro** nos detalhes dela. Ao mudar o estilo de uma obra já enviada, ela aparece como "Ajustes novos para o Kindle"; basta enviar de novo. Tamanho e tipo da letra continuam no menu *Aa* do próprio Kindle.
 
 A lista mostra, para cada novel, quantos capítulos estão no PC e quantos já estão no Kindle. Por exemplo: *"Kindle tem 120 capítulos — 15 novos para enviar"*.
@@ -294,7 +296,6 @@ NOVELSHELF_SUWAYOMI_ROOT=/tmp/suwayomi NOVELSHELF_DUMP_DIR=/tmp/azw3 dotnet test
 - [ ] Guardar as páginas já convertidas para acelerar reenvios
 - [ ] Login e Cloudflare nas fontes de quadrinhos
 - [ ] Compressão PalmDoc no AZW3
-- [ ] Atualização automática ("baixar capítulos novos de todas as novels")
 
 ## Contribuir
 
