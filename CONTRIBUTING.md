@@ -55,7 +55,7 @@ git tag v0.2.0 origin/production
 git push origin v0.2.0
 ```
 
-A tag dispara `.github/workflows/release.yml`. Ele confere se a tag está na `production` e se bate com o `<Version>` do `Directory.Build.props`. Depois roda os testes, publica os executáveis Linux (`tar.gz`) e Windows (`zip`) e cria o GitHub Release.
+A tag dispara `.github/workflows/release.yml`. Ele confere se a tag está na `production` e se bate com o `<Version>` do `Directory.Build.props`. Depois roda os testes, publica os executáveis Linux (AppImage e `tar.gz`) e Windows (`zip`) e cria o GitHub Release.
 
 Acompanhar: `gh run watch` e `gh release view v0.2.0`.
 

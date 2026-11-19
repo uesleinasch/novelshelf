@@ -61,6 +61,7 @@ Baixe a última versão em **[Releases](../../releases)**:
 
 | Sistema | Arquivo | Como abrir |
 |---|---|---|
+| Linux x64 (AppImage) | `NovelShelf-vX.Y.Z-x86_64.AppImage` | `chmod +x` e dê dois cliques (ou `./NovelShelf-vX.Y.Z-x86_64.AppImage`) |
 | Linux x64 | `NovelShelf-vX.Y.Z-linux-x64.tar.gz` | extraia e rode `./NovelShelf` |
 | Windows x64 | `NovelShelf-vX.Y.Z-win-x64.zip` | extraia e rode `NovelShelf.exe` |
 
@@ -152,6 +153,12 @@ Requisitos: [.NET SDK 10](https://dotnet.microsoft.com/download).
 git clone https://github.com/uesleinasch/novelshelf.git
 cd novelshelf
 dotnet run --project src/NovelShelf.App
+```
+
+Gerar o AppImage localmente (precisa de `squashfs-tools`; o runtime do AppImage é baixado do projeto [type2-runtime](https://github.com/AppImage/type2-runtime), ou passe um com `APPIMAGE_RUNTIME=/caminho/runtime-x86_64`):
+
+```bash
+./scripts/build-appimage.sh   # gera artifacts/NovelShelf-vX.Y.Z-x86_64.AppImage
 ```
 
 Testes:
