@@ -13,6 +13,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\NovelShelf.Ebook\NovelShelf.Ebook.csproj" />
+    <ProjectReference Include="..\NovelShelf.Comics\NovelShelf.Comics.csproj" />
   </ItemGroup>
 
 </Project>

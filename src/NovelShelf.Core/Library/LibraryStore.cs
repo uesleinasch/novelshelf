@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.Data.Sqlite;
+using NovelShelf.Core.Comics;
 using NovelShelf.Core.Sources;
 
 namespace NovelShelf.Core.Library;
@@ -64,6 +65,130 @@ public sealed class LibraryStore
                 PRIMARY KEY (novel_id, idx)
             );
             """);
+
+        if (ScalarLong(db, "PRAGMA user_version") < 1)
+        {
+            Execute(db, """
+                BEGIN;
+                ALTER TABLE novels ADD COLUMN kind TEXT NOT NULL DEFAULT 'novel';
+                ALTER TABLE novels ADD COLUMN remote_key TEXT;
+                ALTER TABLE novels ADD COLUMN source_name TEXT;
+                ALTER TABLE novels ADD COLUMN right_to_left INTEGER NOT NULL DEFAULT 0;
+                CREATE TABLE comic_chapters (
+                    novel_id INTEGER NOT NULL REFERENCES novels(id) ON DELETE CASCADE,
+                    chapter_key TEXT NOT NULL,
+                    title TEXT NOT NULL,
+                    number REAL NOT NULL,
+                    source_order INTEGER NOT NULL,
+                    page_count INTEGER NOT NULL,
+                    folder TEXT NOT NULL,
+                    downloaded_at TEXT NOT NULL,
+                    PRIMARY KEY (novel_id, chapter_key)
+                );
+                PRAGMA user_version = 1;
+                COMMIT;
+                """);
+        }
+    }
+
+    public LibraryNovel UpsertComic(ComicDetails details)
+    {
+        using var db = Open();
+        var now = Stamp(_time.GetUtcNow());
+        var existing = ScalarLong(db, "SELECT id FROM novels WHERE kind = 'comic' AND source_id = $source AND remote_key = $key",
+            ("$source", details.SourceId), ("$key", details.Key));
+        (string, object?)[] fields =
+        [
+            ("$source", details.SourceId),
+            ("$sourceName", details.SourceName),
+            ("$key", details.Key),
+            ("$url", (details.WebUrl ?? new Uri("about:blank")).ToString()),
+            ("$title", details.Title),
+            ("$author", details.Author),
+            ("$synopsis", details.Description),
+            ("$status", details.Status),
+            ("$genres", string.Join('\n', details.Genres)),
+            ("$count", details.ChapterCount),
+            ("$now", now),
+        ];
+
+        if (existing > 0)
+        {
+            Execute(db, """
+                UPDATE novels SET source_name = $sourceName, url = $url, title = $title, author = $author,
+                    synopsis = $synopsis, status = $status, genres = $genres, remote_chapter_count = $count,
+                    updated_at = $now
+                WHERE id = $id
+                """, [.. fields, ("$id", existing)]);
+            return QueryNovels(db, "WHERE n.id = $id", ("$id", existing)).Single();
+        }
+
+        Execute(db, """
+            INSERT INTO novels (kind, source_id, source_name, remote_key, slug, url, title, author, synopsis, status,
+                                genres, remote_chapter_count, book_id, added_at, updated_at)
+            VALUES ('comic', $source, $sourceName, $key, $slug, $url, $title, $author, $synopsis, $status,
+                    $genres, $count, $bookId, $now, $now)
+            """, [.. fields, ("$slug", ComicSlug(details)), ("$bookId", Guid.NewGuid().ToString("N"))]);
+        return QueryNovels(db, "WHERE n.id = last_insert_rowid()").Single();
+    }
+
+    public void SetRightToLeft(long novelId, bool rightToLeft)
+    {
+        using var db = Open();
+        Execute(db, "UPDATE novels SET right_to_left = $rtl WHERE id = $id", ("$rtl", rightToLeft ? 1 : 0), ("$id", novelId));
+    }
+
+    public void AddComicChapter(long novelId, ComicChapterInfo chapter, int pageCount, string folder)
+    {
+        using var db = Open();
+        var now = Stamp(_time.GetUtcNow());
+        Execute(db, """
+            INSERT INTO comic_chapters (novel_id, chapter_key, title, number, source_order, page_count, folder, downloaded_at)
+            VALUES ($novel, $key, $title, $number, $order, $pages, $folder, $now)
+            ON CONFLICT (novel_id, chapter_key) DO UPDATE SET
+                title = excluded.title, number = excluded.number, source_order = excluded.source_order,
+                page_count = excluded.page_count, folder = excluded.folder, downloaded_at = excluded.downloaded_at;
+            UPDATE novels SET updated_at = $now WHERE id = $novel;
+            """,
+            ("$novel", novelId), ("$key", chapter.Key), ("$title", chapter.Name), ("$number", chapter.Number),
+            ("$order", chapter.Order), ("$pages", pageCount), ("$folder", folder), ("$now", now));
+    }
+
+    public IReadOnlyList<StoredComicChapter> GetComicChapters(long novelId)
+    {
+        using var db = Open();
+        using var cmd = Command(db, """
+            SELECT novel_id, chapter_key, title, number, source_order, page_count, folder, downloaded_at
+            FROM comic_chapters WHERE novel_id = $novel ORDER BY source_order, number
+            """, [("$novel", novelId)]);
+        using var r = cmd.ExecuteReader();
+        var list = new List<StoredComicChapter>();
+        while (r.Read())
+        {
+            list.Add(new StoredComicChapter(r.GetInt64(0), r.GetString(1), r.GetString(2), r.GetDouble(3),
+                r.GetInt32(4), r.GetInt32(5), r.GetString(6), ParseStamp(r.GetString(7))));
+        }
+        return list;
+    }
+
+    public static string ComicSlug(ComicDetails details)
+    {
+        var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
+            System.Text.Encoding.UTF8.GetBytes($"{details.SourceId}\n{details.Key}")))[..8];
+        var normalized = details.Title.Normalize(System.Text.NormalizationForm.FormD);
+        var slug = new System.Text.StringBuilder();
+        foreach (var c in normalized)
+        {
+            if (char.IsAsciiLetterOrDigit(c))
+                slug.Append(char.ToLowerInvariant(c));
+            else if (System.Globalization.CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark
+                     && slug.Length > 0 && slug[^1] != '-')
+                slug.Append('-');
+        }
+        var text = slug.ToString().Trim('-');
+        if (text.Length > 40)
+            text = text[..40].TrimEnd('-');
+        return text.Length == 0 ? hash : $"{text}-{hash}";
     }
 
     public LibraryNovel Upsert(NovelDetails details)
@@ -176,8 +301,10 @@ public sealed class LibraryStore
         using var cmd = Command(db, $"""
             SELECT n.id, n.source_id, n.slug, n.url, n.title, n.author, n.synopsis, n.cover_url, n.status,
                    n.genres, n.remote_chapter_count, n.first_chapter_url, n.book_id,
-                   (SELECT COUNT(*) FROM chapters c WHERE c.novel_id = n.id),
-                   n.sent_chapter_count, n.added_at, n.updated_at, n.sent_at
+                   (SELECT COUNT(*) FROM chapters c WHERE c.novel_id = n.id)
+                     + (SELECT COUNT(*) FROM comic_chapters cc WHERE cc.novel_id = n.id),
+                   n.sent_chapter_count, n.added_at, n.updated_at, n.sent_at,
+                   n.kind, n.remote_key, n.source_name, n.right_to_left
             FROM novels n
             {tail}
             """, args);
@@ -203,7 +330,11 @@ public sealed class LibraryStore
                 SentChapterCount: r.GetInt32(14),
                 AddedAt: ParseStamp(r.GetString(15)),
                 UpdatedAt: ParseStamp(r.GetString(16)),
-                SentAt: r.IsDBNull(17) ? null : ParseStamp(r.GetString(17))));
+                SentAt: r.IsDBNull(17) ? null : ParseStamp(r.GetString(17)),
+                Kind: r.GetString(18) == "comic" ? WorkKind.Comic : WorkKind.Novel,
+                RemoteKey: NullableString(r, 19),
+                SourceName: NullableString(r, 20),
+                RightToLeft: r.GetInt64(21) != 0));
         }
         return list;
     }
@@ -240,6 +371,12 @@ public sealed class LibraryStore
     {
         using var cmd = Command(db, sql, args);
         cmd.ExecuteNonQuery();
+    }
+
+    private static long ScalarLong(SqliteConnection db, string sql, params (string, object?)[] args)
+    {
+        using var cmd = Command(db, sql, args);
+        return cmd.ExecuteScalar() is { } value and not DBNull ? Convert.ToInt64(value, CultureInfo.InvariantCulture) : 0;
     }
 
     private static string? NullableString(SqliteDataReader r, int i) => r.IsDBNull(i) ? null : r.GetString(i);
