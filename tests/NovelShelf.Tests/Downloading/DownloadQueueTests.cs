@@ -219,4 +219,27 @@ public sealed class DownloadQueueTests
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Fact]
+    public async Task Rate_limited_job_waits_and_holds_its_site_until_retry_time()
+    {
+        var calls = 0;
+        var queue = new DownloadQueue((job, count, progress, ct) =>
+        {
+            if (job.NovelId == 1 && Interlocked.Increment(ref calls) == 1)
+                throw new Core.Net.RateLimitedException("pausa", DateTimeOffset.UtcNow.AddMilliseconds(400));
+            return Task.FromResult(new DownloadResult(count, ReachedEnd: true));
+        });
+        queue.Enqueue(1, "A", "x", 1);
+        queue.Enqueue(2, "B", "x", 1);
+        queue.Enqueue(3, "C", "y", 1);
+
+        await Until(() => queue.Find(3)!.State == DownloadState.Done && queue.Find(1)!.RetryAt is not null);
+        Assert.Equal(DownloadState.Queued, queue.Find(1)!.State);
+        Assert.Equal(DownloadState.Queued, queue.Find(2)!.State);
+        Assert.Equal("pausa", queue.Find(1)!.Detail);
+
+        await Until(() => queue.Find(1)!.State == DownloadState.Done && queue.Find(2)!.State == DownloadState.Done);
+        Assert.Null(queue.Find(1)!.RetryAt);
+    }
 }

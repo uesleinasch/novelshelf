@@ -1,6 +1,7 @@
 using Avalonia.Threading;
 using NovelShelf.Core.Downloading;
 using NovelShelf.Core.Library;
+using NovelShelf.Core.Net;
 
 namespace NovelShelf.App.Services;
 
@@ -15,6 +16,7 @@ public sealed class DownloadService
         _services = services;
         Queue = new DownloadQueue(RunAsync);
         Queue.Changed += OnQueueChanged;
+        services.Http.RateLimited += OnRateLimited;
     }
 
     public DownloadQueue Queue { get; }
@@ -59,6 +61,13 @@ public sealed class DownloadService
         if (result.ReachedEnd || result.Downloaded > 0)
             _services.Library.SetCaughtUp(workId, result.ReachedEnd);
         return result;
+    }
+
+    private void OnRateLimited(RateLimitNotice notice)
+    {
+        var source = _services.Sources.All.FirstOrDefault(s => string.Equals(s.BaseUrl.Host, notice.Host, StringComparison.OrdinalIgnoreCase));
+        if (source is not null)
+            Queue.Annotate(source.Id, $"Site pediu pausa (muitas requisições) — esperando até {notice.Until.ToLocalTime():HH:mm:ss}");
     }
 
     private void OnQueueChanged()
