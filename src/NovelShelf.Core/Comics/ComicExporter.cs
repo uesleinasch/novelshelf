@@ -39,7 +39,7 @@ public sealed class ComicExporter(LibraryStore store, AppPaths paths, ComicDownl
         IReadOnlyList<VolumeSpec> volumes, KindleProfile profile, IProgress<ComicExportProgress>? progress, CancellationToken ct)
     {
         var options = new ComicPageOptions(profile, comic.RightToLeft, store.GetComicLayout(comic.Id));
-        var cover = await CoverAsync(comic.Id, options, ct);
+        var cover = Cover(comic.Id, options);
         var total = volumes.Sum(v => v.Count);
         var done = 0;
         var books = new List<ExportedBook>();
@@ -75,12 +75,6 @@ public sealed class ComicExporter(LibraryStore store, AppPaths paths, ComicDownl
         return books;
     }
 
-    private async Task<byte[]?> CoverAsync(long novelId, ComicPageOptions options, CancellationToken ct)
-    {
-        var file = Path.Combine(paths.Covers, $"{novelId}.jpg");
-        if (!File.Exists(file))
-            return null;
-        var bytes = await File.ReadAllBytesAsync(file, ct);
-        return ComicPageProcessor.ProcessCover(bytes, options.Profile);
-    }
+    private byte[]? Cover(long novelId, ComicPageOptions options) =>
+        new CoverCache(paths).TryRead(novelId, null) is { } bytes ? ComicPageProcessor.ProcessCover(bytes, options.Profile) : null;
 }
