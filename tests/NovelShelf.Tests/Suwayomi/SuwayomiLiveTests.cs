@@ -86,7 +86,7 @@ public sealed class SuwayomiLiveTests
             Directory.CreateDirectory(dump);
             File.Copy(book.Azw3Path, Path.Combine(dump, book.KindleFileName), overwrite: true);
             var pages = downloader.PageFiles(comic.Id, store.GetComicChapters(comic.Id)[0]);
-            var processed = ComicPageProcessor.ProcessChapter(pages.Select(File.ReadAllBytes).ToList(), new ComicPageOptions(KindleProfile.Default, rightToLeft));
+            var processed = ComicPageProcessor.ProcessChapter(pages.Select(File.ReadAllBytes).ToList(), new ComicPageOptions(KindleProfile.Default, rightToLeft), ct);
             var sample = Path.Combine(dump, Path.GetFileNameWithoutExtension(book.KindleFileName));
             Directory.CreateDirectory(sample);
             for (var i = 0; i < Math.Min(4, processed.Count); i++)

@@ -1,5 +1,3 @@
-using SkiaSharp;
-
 namespace NovelShelf.Comics;
 
 internal sealed class StripBuffer(int width, int bytesPerPixel)
@@ -10,28 +8,13 @@ internal sealed class StripBuffer(int width, int bytesPerPixel)
     public int Rows => _rows;
     private int RowBytes => width * bytesPerPixel;
 
-    public void Append(SKBitmap rgba)
+    public void Append(Raster image)
     {
-        if (rgba.Width != width)
-            throw new ArgumentException("A imagem precisa ter a largura da faixa.", nameof(rgba));
-        Ensure(_rows + rgba.Height);
-        var span = rgba.GetPixelSpan();
-        for (var y = 0; y < rgba.Height; y++)
-        {
-            var source = y * rgba.RowBytes;
-            var target = (_rows + y) * RowBytes;
-            if (bytesPerPixel == 4)
-            {
-                span.Slice(source, RowBytes).CopyTo(_data.AsSpan(target, RowBytes));
-                continue;
-            }
-            for (var x = 0; x < width; x++)
-            {
-                var i = source + x * 4;
-                _data[target + x] = (byte)((span[i] * 299 + span[i + 1] * 587 + span[i + 2] * 114) / 1000);
-            }
-        }
-        _rows += rgba.Height;
+        if (image.Width != width || image.Channels != bytesPerPixel)
+            throw new ArgumentException("A imagem precisa ter a largura e os canais da faixa.", nameof(image));
+        Ensure(_rows + image.Height);
+        Buffer.BlockCopy(image.Data, 0, _data, _rows * RowBytes, image.Height * RowBytes);
+        _rows += image.Height;
     }
 
     public int FindCut(int preferred, int minimum, int uniformRange)

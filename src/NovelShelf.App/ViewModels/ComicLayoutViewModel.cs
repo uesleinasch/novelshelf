@@ -187,7 +187,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
             DetectedStrip = ComicPageProcessor.IsWebtoon(pages);
             OnPropertyChanged(nameof(UsesStrip));
             var options = new ComicPageOptions(_services.KindleProfile, RightToLeft, Layout);
-            var rendered = await Task.Run(() => ComicPageProcessor.ProcessChapter(pages, options), ct);
+            var rendered = await Task.Run(() => ComicPageProcessor.ProcessChapter(pages, options, ct), ct);
             ct.ThrowIfCancellationRequested();
             _rendered = rendered;
             PageCount = rendered.Count;
@@ -199,11 +199,13 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
         catch (OperationCanceledException)
         {
         }
-        catch (Exception e) when (e is IOException or InvalidOperationException)
+        catch (Exception e)
         {
+            if (ct.IsCancellationRequested)
+                return;
             IsRendering = false;
             MessageIsError = true;
-            Message = e.Message;
+            Message = $"Não deu para gerar o preview: {e.Message}";
         }
     }
 

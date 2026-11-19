@@ -130,7 +130,7 @@ public sealed class ComicTests
         var pages = new[] { Panels(), Panels(), blank, Panels() };
 
         Assert.True(ComicPageProcessor.IsWebtoon(pages));
-        var output = ComicPageProcessor.ProcessChapter(pages, new ComicPageOptions(Paperwhite));
+        var output = ComicPageProcessor.ProcessChapter(pages, new ComicPageOptions(Paperwhite), TestContext.Current.CancellationToken);
 
         var expectedWithoutBlank = 3 * 4000 * 1236 / 800 / 1648;
         Assert.InRange(output.Count, expectedWithoutBlank, expectedWithoutBlank * 2);
@@ -183,8 +183,8 @@ public sealed class ComicTests
     {
         var tall = Enumerable.Range(0, 2).Select(_ => Image(800, 4000, c => c.DrawRect(50, 100, 700, 3800, new SKPaint { Color = SKColors.Black }))).ToList();
 
-        var asPages = ComicPageProcessor.ProcessChapter(tall, new ComicPageOptions(Paperwhite, Layout: new ComicLayout { Mode = ComicReadingMode.Pages }));
-        var asStrip = ComicPageProcessor.ProcessChapter(tall, new ComicPageOptions(Paperwhite, Layout: new ComicLayout { Mode = ComicReadingMode.Strip }));
+        var asPages = ComicPageProcessor.ProcessChapter(tall, new ComicPageOptions(Paperwhite, Layout: new ComicLayout { Mode = ComicReadingMode.Pages }), TestContext.Current.CancellationToken);
+        var asStrip = ComicPageProcessor.ProcessChapter(tall, new ComicPageOptions(Paperwhite, Layout: new ComicLayout { Mode = ComicReadingMode.Strip }), TestContext.Current.CancellationToken);
 
         Assert.Equal(2, asPages.Count);
         Assert.True(asStrip.Count > 4);
@@ -198,8 +198,8 @@ public sealed class ComicTests
             for (var y = 0; y < 6000; y += 40)
                 c.DrawRect(0, y, 800, 20, new SKPaint { Color = new SKColor((byte)(y / 40 % 200), 0, 0) });
         });
-        var plain = ComicPageProcessor.ProcessStrip([strip], new ComicPageOptions(Paperwhite, Layout: new ComicLayout { CutSearch = 0 }));
-        var overlapped = ComicPageProcessor.ProcessStrip([strip], new ComicPageOptions(Paperwhite, Layout: new ComicLayout { CutSearch = 0, Overlap = 0.2 }));
+        var plain = ComicPageProcessor.ProcessStrip([strip], new ComicPageOptions(Paperwhite, Layout: new ComicLayout { CutSearch = 0 }), TestContext.Current.CancellationToken);
+        var overlapped = ComicPageProcessor.ProcessStrip([strip], new ComicPageOptions(Paperwhite, Layout: new ComicLayout { CutSearch = 0, Overlap = 0.2 }), TestContext.Current.CancellationToken);
 
         Assert.True(overlapped.Count > plain.Count);
         using var first = Decode(overlapped[0]);
