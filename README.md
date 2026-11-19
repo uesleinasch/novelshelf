@@ -276,7 +276,8 @@ NOVELSHELF_SUWAYOMI_ROOT=/tmp/suwayomi NOVELSHELF_DUMP_DIR=/tmp/azw3 dotnet test
 - O app é para **leitura pessoal**. Não redistribua os livros gerados: as traduções pertencem às equipes dos sites.
 - Apoie os tradutores. O Novel Mania aceita doações pelo [tipa.ai](https://tipa.ai/novelmania), e o Illusia tem página de apoio no próprio site.
 - Nos quadrinhos, apoie as scans e as editoras oficiais. As extensões são da comunidade Project Nox. O NovelShelf não distribui extensões; você escolhe e instala as que quiser.
-- O app respeita o `robots.txt` e espaça as requisições para não sobrecarregar o site. Não reduza esse intervalo.
+- O app respeita o `robots.txt` e espaça as requisições para não sobrecarregar o site (no mínimo 1,5 s entre páginas do mesmo site). Não reduza esse intervalo.
+- Se o site responder "muitas requisições" (HTTP 429), o app obedece: espera o tempo que o site pedir (ou 15 s, 30 s, 1 min, 2 min, 5 min), deixa aquele site mais devagar por um tempo e, se o bloqueio continuar, pausa as obras daquele site por 10 minutos e retoma sozinho. Na página **Downloads** aparece "Site pediu pausa" com o horário da próxima tentativa.
 - Este projeto não é afiliado ao Novel Mania, ao Illusia nem à Amazon. Kindle é marca da Amazon.
 
 ## Limitações conhecidas
