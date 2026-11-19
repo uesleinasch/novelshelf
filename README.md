@@ -83,6 +83,8 @@ Na **Biblioteca**, os botões no canto superior direito trocam entre **lista** e
 
 Acima da lista ficam a busca por título ou autor e os filtros: tipo (novel ou quadrinho), site de origem, situação no Kindle (novos para enviar, em dia, nunca enviados) e a ordenação (atualizados, título, adicionados).
 
+**Downloads.** O botão **Baixar** põe a obra na fila e você pode continuar usando o app. Acompanhe tudo na página **Downloads**: progresso de cada obra, pausar, retomar, tirar da fila e mudar a ordem. Obras do mesmo site baixam uma de cada vez, para não sobrecarregar o site; sites diferentes baixam ao mesmo tempo. Se você fechar o app no meio, a fila volta sozinha na próxima vez.
+
 **Estilo do livro.** Na página **Kindle**, em *Estilo dos livros*, você ajusta o recuo da primeira linha, o espaço entre parágrafos, o alinhamento (justificado ou à esquerda) e o título dos capítulos (como no site, só "Capítulo N" ou sem título). A prévia mostra o resultado na hora. Cada novel pode ter um estilo próprio: botão **Estilo do livro** nos detalhes dela. Ao mudar o estilo de uma obra já enviada, ela aparece como "Ajustes novos para o Kindle"; basta enviar de novo. Tamanho e tipo da letra continuam no menu *Aa* do próprio Kindle.
 
 A lista mostra, para cada novel, quantos capítulos estão no PC e quantos já estão no Kindle. Por exemplo: *"Kindle tem 120 capítulos — 15 novos para enviar"*.
