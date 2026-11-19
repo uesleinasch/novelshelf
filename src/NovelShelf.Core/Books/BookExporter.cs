@@ -60,6 +60,7 @@ public sealed class BookExporter(LibraryStore store, AppPaths paths, PoliteHttpC
     {
         var chapters = all.Skip(volume.First).Take(volume.Count).ToList();
         var key = Volumes.BookKey(novel.BookId, volume);
+        cover = Volumes.CoverFor(cover, volume);
         var content = new BookContent(
             Identifier: Volumes.Identifier(key),
             Title: Volumes.Title(novel.Title, volume),

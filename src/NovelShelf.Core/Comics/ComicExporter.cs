@@ -59,7 +59,8 @@ public sealed class ComicExporter(LibraryStore store, AppPaths paths, ComicDownl
             var key = Volumes.BookKey(comic.BookId, volume);
             var info = new ComicBookInfo(
                 Volumes.Title(comic.Title, volume), comic.Author, comic.Synopsis, "pt-BR",
-                stored.Skip(volume.First).Take(volume.Count).Max(c => c.DownloadedAt), BookExporter.UniqueIdFor(key), cover);
+                stored.Skip(volume.First).Take(volume.Count).Max(c => c.DownloadedAt), BookExporter.UniqueIdFor(key),
+                Volumes.CoverFor(cover, volume));
             var book = ComicBookBuilder.Build(info, chapters, profile, comic.RightToLeft);
 
             var fileName = Volumes.FileName(BookExporter.FileNameFor(comic), volume);

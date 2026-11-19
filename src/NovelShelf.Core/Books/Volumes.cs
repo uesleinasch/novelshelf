@@ -36,6 +36,9 @@ public static class Volumes
     public static string Identifier(string bookKey) =>
         $"urn:uuid:{(Guid.TryParseExact(bookKey, "N", out var id) ? id : new Guid(MD5.HashData(Encoding.UTF8.GetBytes(bookKey))))}";
 
+    public static byte[]? CoverFor(byte[]? cover, VolumeSpec volume) =>
+        cover is null || volume.IsWholeWork ? cover : NovelShelf.Comics.CoverImage.WithVolumeBadge(cover, volume.Number);
+
     public static bool IsFileOf(string baseName, string fileName) =>
         fileName == $"{baseName}.azw3"
         || (fileName.StartsWith($"{baseName}-vol", StringComparison.Ordinal)
