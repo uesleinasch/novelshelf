@@ -48,7 +48,7 @@ public partial class MainWindow : Window
         {
             SearchViewModel => "search",
             ComicsViewModel => "comics",
-            KindleViewModel => "kindle",
+            KindleViewModel or BookStyleViewModel { IsForNovel: false } => "kindle",
             _ => "library",
         };
         var item = Nav.MenuItems.Concat(Nav.FooterMenuItems)
