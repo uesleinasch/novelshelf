@@ -1,5 +1,6 @@
 using System.Globalization;
 using Microsoft.Data.Sqlite;
+using NovelShelf.Comics;
 using NovelShelf.Core.Comics;
 using NovelShelf.Core.Sources;
 
@@ -89,6 +90,30 @@ public sealed class LibraryStore
                 COMMIT;
                 """);
         }
+
+        if (ScalarLong(db, "PRAGMA user_version") < 2)
+        {
+            Execute(db, """
+                BEGIN;
+                ALTER TABLE novels ADD COLUMN comic_layout TEXT;
+                PRAGMA user_version = 2;
+                COMMIT;
+                """);
+        }
+    }
+
+    public ComicLayout GetComicLayout(long novelId)
+    {
+        using var db = Open();
+        using var cmd = Command(db, "SELECT comic_layout FROM novels WHERE id = $id", [("$id", novelId)]);
+        return ComicLayout.FromJson(cmd.ExecuteScalar() as string);
+    }
+
+    public void SetComicLayout(long novelId, ComicLayout layout)
+    {
+        using var db = Open();
+        Execute(db, "UPDATE novels SET comic_layout = $layout WHERE id = $id",
+            ("$layout", layout == ComicLayout.Default ? null : layout.Normalized().ToJson()), ("$id", novelId));
     }
 
     public LibraryNovel UpsertComic(ComicDetails details)

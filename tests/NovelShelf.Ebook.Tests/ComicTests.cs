@@ -113,7 +113,7 @@ public sealed class ComicTests
     {
         var spread = Image(2000, 1000, c => c.DrawRect(100, 100, 1800, 800, new SKPaint { Color = SKColors.Black }));
 
-        var output = ComicPageProcessor.ProcessPage(spread, new ComicPageOptions(Paperwhite, SplitWidePages: false));
+        var output = ComicPageProcessor.ProcessPage(spread, new ComicPageOptions(Paperwhite, Layout: new ComicLayout { WidePages = WidePageMode.Keep }));
 
         Assert.Single(output);
     }
@@ -148,6 +148,87 @@ public sealed class ComicTests
         var pages = Enumerable.Range(0, 5).Select(_ => Image(900, 1350, _ => { })).ToList();
 
         Assert.False(ComicPageProcessor.IsWebtoon(pages));
+    }
+
+    [Fact]
+    public void Manual_margins_zoom_into_the_kept_area()
+    {
+        var page = Image(1000, 1500, c =>
+        {
+            c.Clear(new SKColor(128, 128, 128));
+            c.DrawRect(450, 700, 100, 100, new SKPaint { Color = SKColors.Black });
+        });
+        var layout = new ComicLayout { Margins = MarginMode.Manual, MarginLeft = 0.25, MarginRight = 0.25, MarginTop = 0.25, MarginBottom = 0.25 };
+
+        using var result = Decode(Assert.Single(ComicPageProcessor.ProcessPage(page, new ComicPageOptions(Paperwhite, Layout: layout))));
+
+        var (left, right) = DarkColumns(result);
+        Assert.InRange(right - left, 200, 280);
+    }
+
+    [Fact]
+    public void Wide_page_can_be_rotated_to_fill_the_screen()
+    {
+        var spread = Image(2000, 1000, c => c.DrawRect(0, 0, 2000, 1000, new SKPaint { Color = SKColors.Black }));
+        var layout = new ComicLayout { Margins = MarginMode.Off, WidePages = WidePageMode.Rotate };
+
+        using var result = Decode(Assert.Single(ComicPageProcessor.ProcessPage(spread, new ComicPageOptions(Paperwhite, Layout: layout))));
+
+        var dark = Enumerable.Range(0, result.Height).Count(y => result.GetPixel(result.Width / 2, y).Red < 100);
+        Assert.True(dark > 1600, $"página girada ocupa {dark}px de altura; sem girar seriam 618px");
+    }
+
+    [Fact]
+    public void Mode_overrides_webtoon_detection()
+    {
+        var tall = Enumerable.Range(0, 2).Select(_ => Image(800, 4000, c => c.DrawRect(50, 100, 700, 3800, new SKPaint { Color = SKColors.Black }))).ToList();
+
+        var asPages = ComicPageProcessor.ProcessChapter(tall, new ComicPageOptions(Paperwhite, Layout: new ComicLayout { Mode = ComicReadingMode.Pages }));
+        var asStrip = ComicPageProcessor.ProcessChapter(tall, new ComicPageOptions(Paperwhite, Layout: new ComicLayout { Mode = ComicReadingMode.Strip }));
+
+        Assert.Equal(2, asPages.Count);
+        Assert.True(asStrip.Count > 4);
+    }
+
+    [Fact]
+    public void Overlap_repeats_the_end_of_a_slice_at_the_top_of_the_next()
+    {
+        var strip = Image(800, 6000, c =>
+        {
+            for (var y = 0; y < 6000; y += 40)
+                c.DrawRect(0, y, 800, 20, new SKPaint { Color = new SKColor((byte)(y / 40 % 200), 0, 0) });
+        });
+        var plain = ComicPageProcessor.ProcessStrip([strip], new ComicPageOptions(Paperwhite, Layout: new ComicLayout { CutSearch = 0 }));
+        var overlapped = ComicPageProcessor.ProcessStrip([strip], new ComicPageOptions(Paperwhite, Layout: new ComicLayout { CutSearch = 0, Overlap = 0.2 }));
+
+        Assert.True(overlapped.Count > plain.Count);
+        using var first = Decode(overlapped[0]);
+        using var second = Decode(overlapped[1]);
+        var tail = first.Height - (int)(first.Height * 0.2) + 5;
+        Assert.InRange(Math.Abs(first.GetPixel(400, tail).Red - second.GetPixel(400, 5).Red), 0, 6);
+    }
+
+    [Fact]
+    public void Gamma_above_one_darkens_mid_tones()
+    {
+        var page = Image(900, 1200, c => c.Clear(new SKColor(150, 150, 150)));
+        var off = new ComicLayout { Margins = MarginMode.Off };
+
+        using var normal = Decode(Assert.Single(ComicPageProcessor.ProcessPage(page, new ComicPageOptions(Paperwhite, Layout: off))));
+        using var darker = Decode(Assert.Single(ComicPageProcessor.ProcessPage(page, new ComicPageOptions(Paperwhite, Layout: off with { Gamma = 1.8 }))));
+
+        Assert.True(MeanLuma(darker) < MeanLuma(normal) - 30);
+    }
+
+    [Fact]
+    public void Layout_survives_a_json_round_trip_and_bad_values_are_clamped()
+    {
+        var layout = new ComicLayout { Mode = ComicReadingMode.Strip, Margins = MarginMode.Manual, MarginLeft = 0.1, Overlap = 0.15, Gamma = 1.4 };
+
+        Assert.Equal(layout, ComicLayout.FromJson(layout.ToJson()));
+        Assert.Equal(ComicLayout.Default, ComicLayout.FromJson(null));
+        Assert.Equal(ComicLayout.Default, ComicLayout.FromJson("{quebrado"));
+        Assert.Equal(0.4, ComicLayout.FromJson("""{"MarginLeft":9,"Gamma":99}""").MarginLeft);
     }
 
     [Fact]

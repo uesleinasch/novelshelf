@@ -44,12 +44,12 @@ internal sealed class StripBuffer(int width, int bytesPerPixel)
         return Math.Min(preferred, _rows);
     }
 
-    public byte[] Take(int rows)
+    public byte[] Take(int rows, int keep)
     {
-        var bytes = rows * RowBytes;
-        var slice = _data[..bytes];
-        Buffer.BlockCopy(_data, bytes, _data, 0, (_rows - rows) * RowBytes);
-        _rows -= rows;
+        var slice = _data[..(rows * RowBytes)];
+        var consumed = rows - keep;
+        Buffer.BlockCopy(_data, consumed * RowBytes, _data, 0, (_rows - consumed) * RowBytes);
+        _rows -= consumed;
         return slice;
     }
 

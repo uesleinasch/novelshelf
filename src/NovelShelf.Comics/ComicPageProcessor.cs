@@ -6,9 +6,11 @@ namespace NovelShelf.Comics;
 public sealed record ComicPageOptions(
     KindleProfile Profile,
     bool RightToLeft = false,
-    bool AutoCrop = true,
-    bool SplitWidePages = true,
-    int JpegQuality = 85);
+    ComicLayout? Layout = null,
+    int JpegQuality = 85)
+{
+    public ComicLayout EffectiveLayout => (Layout ?? ComicLayout.Default).Normalized();
+}
 
 public static class ComicPageProcessor
 {
@@ -26,63 +28,97 @@ public static class ComicPageProcessor
         return ratios.Count > 0 && ratios[ratios.Count / 2] >= WebtoonAspect;
     }
 
+    public static bool UsesStrip(IReadOnlyList<byte[]> pages, ComicLayout layout) => layout.Mode switch
+    {
+        ComicReadingMode.Strip => true,
+        ComicReadingMode.Pages => false,
+        _ => IsWebtoon(pages),
+    };
+
     public static List<byte[]> ProcessChapter(IReadOnlyList<byte[]> pages, ComicPageOptions options) =>
-        IsWebtoon(pages) ? ProcessStrip(pages, options) : pages.SelectMany(p => ProcessPage(p, options)).ToList();
+        UsesStrip(pages, options.EffectiveLayout)
+            ? ProcessStrip(pages, options)
+            : pages.SelectMany(p => ProcessPage(p, options)).ToList();
 
     public static List<byte[]> ProcessPage(byte[] data, ComicPageOptions options)
     {
+        var layout = options.EffectiveLayout;
         using var source = DecodeOpaque(data);
         if (source is null)
             return [];
 
-        var bounds = options.AutoCrop ? ContentBounds(source) : new SKRectI(0, 0, source.Width, source.Height);
+        var bounds = layout.Margins switch
+        {
+            MarginMode.Auto => ContentBounds(source),
+            MarginMode.Manual => ManualBounds(source.Width, source.Height, layout),
+            _ => new SKRectI(0, 0, source.Width, source.Height),
+        };
         using var cropped = Crop(source, bounds);
         var output = new List<byte[]>();
-        if (options.SplitWidePages && cropped.Width > cropped.Height * 1.05)
+        if (cropped.Width > cropped.Height * 1.05 && layout.WidePages != WidePageMode.Keep)
         {
+            if (layout.WidePages == WidePageMode.Rotate)
+            {
+                using var rotated = Rotate(cropped, options.RightToLeft);
+                output.Add(FitAndEncode(rotated, options));
+                return output;
+            }
             var half = cropped.Width / 2;
             using var left = Crop(cropped, new SKRectI(0, 0, half, cropped.Height));
             using var right = Crop(cropped, new SKRectI(half, 0, cropped.Width, cropped.Height));
             foreach (var part in options.RightToLeft ? new[] { right, left } : [left, right])
                 output.Add(FitAndEncode(part, options));
+            return output;
         }
-        else
-        {
-            output.Add(FitAndEncode(cropped, options));
-        }
+        output.Add(FitAndEncode(cropped, options));
         return output;
     }
 
     public static List<byte[]> ProcessStrip(IReadOnlyList<byte[]> pages, ComicPageOptions options)
     {
         var profile = options.Profile;
+        var layout = options.EffectiveLayout;
         var strip = new StripBuffer(profile.Width, profile.Color ? 4 : 1);
         var output = new List<byte[]>();
+        var keep = (int)Math.Round(profile.Height * layout.Overlap);
+        var minimumCut = (int)Math.Round(profile.Height * (1 - layout.CutSearch));
 
         foreach (var data in pages)
         {
             using var source = DecodeOpaque(data);
             if (source is null)
                 continue;
-            var height = Math.Max(1, (int)Math.Round((double)source.Height * profile.Width / source.Width));
-            using var scaled = ScaleTo(source, profile.Width, height);
+            var bounds = layout.Margins == MarginMode.Manual
+                ? ManualBounds(source.Width, source.Height, layout with { MarginTop = 0, MarginBottom = 0 })
+                : new SKRectI(0, 0, source.Width, source.Height);
+            using var cropped = Crop(source, bounds);
+            var height = Math.Max(1, (int)Math.Round((double)cropped.Height * profile.Width / cropped.Width));
+            using var scaled = ScaleTo(cropped, profile.Width, height);
             strip.Append(scaled);
             while (strip.Rows >= profile.Height + profile.Height / 4)
-                EmitSlice(strip, options, output, final: false);
+                EmitSlice(strip, options, output, minimumCut, keep);
         }
-        while (strip.Rows > 0)
-            EmitSlice(strip, options, output, final: true);
+        while (strip.Rows > keep + profile.Height / 20)
+        {
+            if (strip.Rows <= profile.Height)
+            {
+                var rows = strip.Rows;
+                var last = strip.Take(rows, 0);
+                if (!strip.IsBlank(last, UniformRowRange))
+                    output.Add(EncodeSlice(last, rows, options));
+                break;
+            }
+            EmitSlice(strip, options, output, minimumCut, keep);
+        }
         return output;
     }
 
-    private static void EmitSlice(StripBuffer strip, ComicPageOptions options, List<byte[]> output, bool final)
+    private static void EmitSlice(StripBuffer strip, ComicPageOptions options, List<byte[]> output, int minimumCut, int keep)
     {
-        var target = options.Profile.Height;
-        var cut = strip.Rows <= target ? strip.Rows : strip.FindCut(target, (int)(target * 0.7), UniformRowRange);
-        var slice = strip.Take(cut);
-        if (strip.IsBlank(slice, UniformRowRange) || (final && cut < target / 20))
-            return;
-        output.Add(EncodeSlice(slice, cut, options));
+        var cut = strip.FindCut(options.Profile.Height, Math.Max(1, minimumCut), UniformRowRange);
+        var slice = strip.Take(cut, Math.Min(keep, cut - 1));
+        if (!strip.IsBlank(slice, UniformRowRange))
+            output.Add(EncodeSlice(slice, cut, options));
     }
 
     private static byte[] EncodeSlice(byte[] rows, int rowCount, ComicPageOptions options)
@@ -96,6 +132,7 @@ public static class ComicPageProcessor
         var top = (profile.Height - rowCount) / 2;
         for (var y = 0; y < rowCount; y++)
             Buffer.BlockCopy(rows, y * rowBytes, pixels, (top + y) * page.RowBytes, rowBytes);
+        ApplyGamma(pixels, page.BytesPerPixel, options.EffectiveLayout.Gamma);
         Marshal.Copy(pixels, 0, page.GetPixels(), pixels.Length);
         return Encode(page, options.JpegQuality);
     }
@@ -108,17 +145,41 @@ public static class ComicPageProcessor
         var height = Math.Clamp((int)Math.Round(source.Height * scale), 1, profile.Height);
         using var scaled = ScaleTo(source, width, height);
 
-        using var page = new SKBitmap(new SKImageInfo(profile.Width, profile.Height, SKColorType.Rgba8888, SKAlphaType.Opaque));
-        using (var canvas = new SKCanvas(page))
+        var colorType = profile.Color ? SKColorType.Rgba8888 : SKColorType.Gray8;
+        using var canvasPage = new SKBitmap(new SKImageInfo(profile.Width, profile.Height, SKColorType.Rgba8888, SKAlphaType.Opaque));
+        using (var canvas = new SKCanvas(canvasPage))
         {
             canvas.Clear(SKColors.White);
             canvas.DrawBitmap(scaled, (profile.Width - width) / 2, (profile.Height - height) / 2);
         }
 
-        if (profile.Color)
-            return Encode(page, options.JpegQuality);
-        using var gray = page.Copy(SKColorType.Gray8) ?? throw new InvalidOperationException("Falha ao converter a página para tons de cinza.");
-        return Encode(gray, options.JpegQuality);
+        using var page = profile.Color
+            ? canvasPage.Copy()
+            : canvasPage.Copy(colorType) ?? throw new InvalidOperationException("Falha ao converter a página para tons de cinza.");
+        var gamma = options.EffectiveLayout.Gamma;
+        if (Math.Abs(gamma - 1) > 0.001)
+        {
+            var pixels = new byte[page.RowBytes * page.Height];
+            Marshal.Copy(page.GetPixels(), pixels, 0, pixels.Length);
+            ApplyGamma(pixels, page.BytesPerPixel, gamma);
+            Marshal.Copy(pixels, 0, page.GetPixels(), pixels.Length);
+        }
+        return Encode(page, options.JpegQuality);
+    }
+
+    internal static void ApplyGamma(byte[] pixels, int bytesPerPixel, double gamma)
+    {
+        if (Math.Abs(gamma - 1) <= 0.001)
+            return;
+        var table = new byte[256];
+        for (var i = 0; i < 256; i++)
+            table[i] = (byte)Math.Round(255 * Math.Pow(i / 255.0, gamma));
+        for (var i = 0; i < pixels.Length; i++)
+        {
+            if (bytesPerPixel == 4 && i % 4 == 3)
+                continue;
+            pixels[i] = table[pixels[i]];
+        }
     }
 
     private static byte[] Encode(SKBitmap bitmap, int quality)
@@ -148,11 +209,40 @@ public static class ComicPageProcessor
         return bitmap;
     }
 
+    private static SKRectI ManualBounds(int width, int height, ComicLayout layout)
+    {
+        var left = (int)Math.Round(width * layout.MarginLeft);
+        var right = width - (int)Math.Round(width * layout.MarginRight);
+        var top = (int)Math.Round(height * layout.MarginTop);
+        var bottom = height - (int)Math.Round(height * layout.MarginBottom);
+        if (right - left < width / 10 || bottom - top < height / 10)
+            return new SKRectI(0, 0, width, height);
+        return new SKRectI(left, top, right, bottom);
+    }
+
     private static SKBitmap Crop(SKBitmap source, SKRectI bounds)
     {
         var bitmap = new SKBitmap(new SKImageInfo(bounds.Width, bounds.Height, SKColorType.Rgba8888, SKAlphaType.Opaque));
         using var canvas = new SKCanvas(bitmap);
         canvas.DrawBitmap(source, bounds, new SKRect(0, 0, bounds.Width, bounds.Height));
+        return bitmap;
+    }
+
+    private static SKBitmap Rotate(SKBitmap source, bool counterClockwise)
+    {
+        var bitmap = new SKBitmap(new SKImageInfo(source.Height, source.Width, SKColorType.Rgba8888, SKAlphaType.Opaque));
+        using var canvas = new SKCanvas(bitmap);
+        if (counterClockwise)
+        {
+            canvas.Translate(0, source.Width);
+            canvas.RotateDegrees(-90);
+        }
+        else
+        {
+            canvas.Translate(source.Height, 0);
+            canvas.RotateDegrees(90);
+        }
+        canvas.DrawBitmap(source, 0, 0);
         return bitmap;
     }
 

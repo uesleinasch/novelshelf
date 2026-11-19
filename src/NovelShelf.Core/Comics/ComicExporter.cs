@@ -16,7 +16,7 @@ public sealed class ComicExporter(LibraryStore store, AppPaths paths, ComicDownl
         if (stored.Count == 0)
             throw new InvalidOperationException($"'{comic.Title}' ainda não tem capítulos baixados.");
 
-        var options = new ComicPageOptions(profile, comic.RightToLeft);
+        var options = new ComicPageOptions(profile, comic.RightToLeft, store.GetComicLayout(novelId));
         var chapters = new List<ComicChapter>(stored.Count);
         for (var i = 0; i < stored.Count; i++)
         {
@@ -52,7 +52,8 @@ public sealed class ComicExporter(LibraryStore store, AppPaths paths, ComicDownl
         if (!File.Exists(file))
             return null;
         var bytes = await File.ReadAllBytesAsync(file, ct);
-        return ComicPageProcessor.ProcessPage(bytes, options with { AutoCrop = false, SplitWidePages = false })
+        var cover = new ComicLayout { Mode = ComicReadingMode.Pages, Margins = MarginMode.Off, WidePages = WidePageMode.Keep };
+        return ComicPageProcessor.ProcessPage(bytes, options with { Layout = cover })
             .FirstOrDefault();
     }
 }

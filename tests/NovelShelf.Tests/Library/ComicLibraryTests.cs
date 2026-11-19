@@ -72,6 +72,20 @@ public sealed class ComicLibraryTests : IDisposable
     }
 
     [Fact]
+    public void Comic_layout_is_saved_per_work()
+    {
+        var comic = _store.UpsertComic(_provider.Details("Invencível"));
+        Assert.Equal(ComicLayout.Default, _store.GetComicLayout(comic.Id));
+
+        var layout = new ComicLayout { Mode = ComicReadingMode.Strip, Overlap = 0.1, Gamma = 1.3 };
+        _store.SetComicLayout(comic.Id, layout);
+
+        Assert.Equal(layout, new LibraryStore(_paths.Database).GetComicLayout(comic.Id));
+        _store.SetComicLayout(comic.Id, ComicLayout.Default);
+        Assert.Equal(ComicLayout.Default, _store.GetComicLayout(comic.Id));
+    }
+
+    [Fact]
     public async Task Download_fetches_next_chapters_in_reading_order_and_reports_the_end()
     {
         var comic = _store.UpsertComic(_provider.Details("Invencível"));
