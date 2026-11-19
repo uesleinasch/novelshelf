@@ -129,9 +129,8 @@ public static class ComicPageProcessor
         var pixels = new byte[page.RowBytes * profile.Height];
         Array.Fill(pixels, (byte)255);
         var rowBytes = profile.Width * page.BytesPerPixel;
-        var top = (profile.Height - rowCount) / 2;
         for (var y = 0; y < rowCount; y++)
-            Buffer.BlockCopy(rows, y * rowBytes, pixels, (top + y) * page.RowBytes, rowBytes);
+            Buffer.BlockCopy(rows, y * rowBytes, pixels, y * page.RowBytes, rowBytes);
         ApplyGamma(pixels, page.BytesPerPixel, options.EffectiveLayout.Gamma);
         Marshal.Copy(pixels, 0, page.GetPixels(), pixels.Length);
         return Encode(page, options.JpegQuality);

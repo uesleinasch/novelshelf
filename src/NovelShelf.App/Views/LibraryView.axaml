@@ -92,6 +92,8 @@
                         </ui:FASettingsExpander.IconSource>
                         <ui:FASettingsExpander.Footer>
                             <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Ajustar corte" Command="{Binding AdjustLayoutCommand}" IsVisible="{Binding Selected.IsComic}"
+                                        ToolTip.Tip="Preview e ajuste de corte e enquadramento desta obra" />
                                 <Button Content="{Binding ExportButton}" Command="{Binding ExportCommand}" />
                                 <Button Content="Abrir pasta" Command="{Binding OpenBooksFolderCommand}" />
                             </StackPanel>

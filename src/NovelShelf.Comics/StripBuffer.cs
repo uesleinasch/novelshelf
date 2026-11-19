@@ -36,13 +36,39 @@ internal sealed class StripBuffer(int width, int bytesPerPixel)
 
     public int FindCut(int preferred, int minimum, int uniformRange)
     {
-        for (var y = Math.Min(preferred, _rows); y >= minimum; y--)
+        var start = Math.Min(preferred, _rows);
+        for (var y = start; y >= minimum; y--)
         {
             if (IsUniformRow(_data, y - 1, uniformRange))
                 return y;
         }
-        return Math.Min(preferred, _rows);
+
+        var calm = Activity(start - 1) * 35 / 100;
+        var calmMinimum = Math.Max(minimum, start - start * 15 / 100);
+        for (var y = start; y >= calmMinimum; y--)
+        {
+            if (Activity(y - 1) <= calm)
+                return y;
+        }
+        return start;
     }
+
+    private long Activity(int y)
+    {
+        long sum = 0;
+        var start = y * RowBytes;
+        var previous = Luma(_data, start);
+        for (var x = 1; x < width; x++)
+        {
+            var value = Luma(_data, start + x * bytesPerPixel);
+            sum += Math.Abs(value - previous);
+            previous = value;
+        }
+        return sum;
+    }
+
+    private int Luma(byte[] data, int i) =>
+        bytesPerPixel == 1 ? data[i] : (data[i] * 299 + data[i + 1] * 587 + data[i + 2] * 114) / 1000;
 
     public byte[] Take(int rows, int keep)
     {

@@ -13,6 +13,7 @@ public sealed class ViewLocator : IDataTemplate
         LibraryViewModel => new LibraryView(),
         KindleViewModel => new KindleView(),
         ComicsViewModel => new ComicsView(),
+        ComicLayoutViewModel => new ComicLayoutView(),
         _ => new TextBlock { Text = $"Sem view para {param?.GetType().Name}" },
     };
 

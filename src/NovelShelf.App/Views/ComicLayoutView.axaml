@@ -1,0 +1,133 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:FluentAvalonia.UI.Controls"
+             xmlns:vm="using:NovelShelf.App.ViewModels"
+             xmlns:lib="using:NovelShelf.Core.Library"
+             x:Class="NovelShelf.App.Views.ComicLayoutView"
+             x:DataType="vm:ComicLayoutViewModel">
+    <Grid RowDefinitions="Auto,*" ColumnDefinitions="*,400" Margin="24,16">
+        <Grid Grid.ColumnSpan="2" ColumnDefinitions="Auto,*" Margin="0,0,0,12">
+            <Button Margin="0,0,12,0" Command="{Binding CloseCommand}" ToolTip.Tip="Voltar para a biblioteca">
+                <ui:FASymbolIcon Symbol="Back" />
+            </Button>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="Ajustar conversão" Theme="{StaticResource TitleTextBlockStyle}" />
+                <TextBlock Text="{Binding Title}" Opacity="0.75" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1" RowDefinitions="*,Auto,Auto">
+            <TextBlock Text="Baixe pelo menos um capítulo para ver o preview." Opacity="0.75" IsVisible="{Binding !HasChapters}" />
+            <Border Padding="18" CornerRadius="18" Background="#1f1f1f" HorizontalAlignment="Center" IsVisible="{Binding HasChapters}">
+                <Panel>
+                    <Border Background="White">
+                        <Image Source="{Binding Preview}" Stretch="Uniform" />
+                    </Border>
+                    <ui:FAProgressRing IsIndeterminate="True" Width="48" Height="48" IsVisible="{Binding IsRendering}" />
+                </Panel>
+            </Border>
+            <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,12,0,0" IsVisible="{Binding HasChapters}">
+                <ComboBox ItemsSource="{Binding Chapters}" SelectedItem="{Binding Chapter}" HorizontalAlignment="Stretch">
+                    <ComboBox.ItemTemplate>
+                        <DataTemplate x:DataType="lib:StoredComicChapter">
+                            <TextBlock Text="{Binding Title}" />
+                        </DataTemplate>
+                    </ComboBox.ItemTemplate>
+                </ComboBox>
+                <Button Grid.Column="1" Margin="12,0,0,0" Command="{Binding PreviousPageCommand}" ToolTip.Tip="Tela anterior">
+                    <ui:FASymbolIcon Symbol="Back" />
+                </Button>
+                <TextBlock Grid.Column="2" Margin="12,0" MinWidth="120" TextAlignment="Center" VerticalAlignment="Center"
+                           Text="{Binding PageLabel}" />
+                <Button Grid.Column="3" Command="{Binding NextPageCommand}" ToolTip.Tip="Próxima tela">
+                    <ui:FASymbolIcon Symbol="Forward" />
+                </Button>
+            </Grid>
+            <Slider Grid.Row="2" Minimum="0" Maximum="{Binding LastPageIndex}" Value="{Binding PageIndex}"
+                    IsSnapToTickEnabled="True" TickFrequency="1" IsVisible="{Binding HasChapters}" />
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" Grid.Column="1" Margin="20,0,0,0">
+            <StackPanel Spacing="18">
+                <TextBlock TextWrapping="Wrap" Opacity="0.75">
+                    <Run Text="O preview mostra a tela exata que vai para o" />
+                    <Run Text="{Binding ProfileName}" />
+                    <Run Text=". Os ajustes valem só para esta obra." />
+                </TextBlock>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Formato" FontWeight="SemiBold" />
+                    <ComboBox SelectedIndex="{Binding ModeIndex}" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="Automático" />
+                        <ComboBoxItem Content="Páginas (mangá, HQ)" />
+                        <ComboBoxItem Content="Tira contínua (webtoon)" />
+                    </ComboBox>
+                    <TextBlock Text="{Binding DetectedLabel}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <ToggleSwitch IsChecked="{Binding RightToLeft}" OnContent="Ler da direita para a esquerda (mangá japonês)"
+                              OffContent="Ler da esquerda para a direita" />
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Margens" FontWeight="SemiBold" />
+                    <ComboBox SelectedIndex="{Binding MarginIndex}" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="Cortar sozinho" />
+                        <ComboBoxItem Content="Não cortar" />
+                        <ComboBoxItem Content="Cortar manualmente" />
+                    </ComboBox>
+                    <StackPanel Spacing="4" IsVisible="{Binding ShowManualMargins}">
+                        <TextBlock Text="Quanto mais corta, maior fica o desenho na tela." FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding MarginLeft, StringFormat='Esquerda: {0:0}%'}" FontSize="12" />
+                        <Slider Minimum="0" Maximum="40" Value="{Binding MarginLeft}" TickFrequency="1" IsSnapToTickEnabled="True" />
+                        <TextBlock Text="{Binding MarginRight, StringFormat='Direita: {0:0}%'}" FontSize="12" />
+                        <Slider Minimum="0" Maximum="40" Value="{Binding MarginRight}" TickFrequency="1" IsSnapToTickEnabled="True" />
+                        <StackPanel Spacing="4" IsVisible="{Binding ShowPageOptions}">
+                            <TextBlock Text="{Binding MarginTop, StringFormat='Topo: {0:0}%'}" FontSize="12" />
+                            <Slider Minimum="0" Maximum="40" Value="{Binding MarginTop}" TickFrequency="1" IsSnapToTickEnabled="True" />
+                            <TextBlock Text="{Binding MarginBottom, StringFormat='Base: {0:0}%'}" FontSize="12" />
+                            <Slider Minimum="0" Maximum="40" Value="{Binding MarginBottom}" TickFrequency="1" IsSnapToTickEnabled="True" />
+                        </StackPanel>
+                        <TextBlock Text="Na tira contínua só as laterais são cortadas." FontSize="12" Opacity="0.7"
+                                   TextWrapping="Wrap" IsVisible="{Binding ShowStripOptions}" />
+                    </StackPanel>
+                </StackPanel>
+
+                <StackPanel Spacing="6" IsVisible="{Binding ShowPageOptions}">
+                    <TextBlock Text="Páginas duplas" FontWeight="SemiBold" />
+                    <ComboBox SelectedIndex="{Binding WideIndex}" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="Dividir em duas telas" />
+                        <ComboBoxItem Content="Manter inteira" />
+                        <ComboBoxItem Content="Girar (ler com o Kindle deitado)" />
+                    </ComboBox>
+                </StackPanel>
+
+                <StackPanel Spacing="6" IsVisible="{Binding ShowStripOptions}">
+                    <TextBlock Text="Tira contínua" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Overlap, StringFormat='Repetir no topo da próxima tela: {0:0}%'}" FontSize="12" />
+                    <Slider Minimum="0" Maximum="40" Value="{Binding Overlap}" TickFrequency="1" IsSnapToTickEnabled="True" />
+                    <TextBlock Text="Repete o fim de cada tela no começo da seguinte, para não perder o que foi cortado no meio."
+                               FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding CutSearch, StringFormat='Procurar espaço entre quadros: {0:0}%'}" FontSize="12" Margin="0,8,0,0" />
+                    <Slider Minimum="0" Maximum="60" Value="{Binding CutSearch}" TickFrequency="1" IsSnapToTickEnabled="True" />
+                    <TextBlock Text="Quanto maior, mais a tela pode encurtar para cortar num espaço vazio em vez de no meio do desenho."
+                               FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="{Binding Gamma, StringFormat='Tons médios: {0:0.00}'}" FontWeight="SemiBold" />
+                    <Slider Minimum="0.4" Maximum="2.5" Value="{Binding Gamma}" TickFrequency="0.05" IsSnapToTickEnabled="True" />
+                    <TextBlock Text="Abaixo de 1 clareia, acima de 1 escurece. Telas e-ink costumam ficar melhores entre 1,2 e 1,6."
+                               FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <ui:FAInfoBar Title="Ajustes" Message="{Binding Message}" IsClosable="False"
+                              IsOpen="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="accent" Content="Salvar para esta obra" Command="{Binding SaveCommand}" />
+                    <Button Content="Restaurar padrão" Command="{Binding ResetCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

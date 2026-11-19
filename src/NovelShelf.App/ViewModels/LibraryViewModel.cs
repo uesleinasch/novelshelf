@@ -53,14 +53,14 @@ public sealed partial class LibraryItemViewModel : ViewModelBase
     private async Task LoadCoverAsync(CoverLoader covers) => Cover = await covers.LoadAsync(Novel.CoverUrl, Novel.Id);
 }
 
-public sealed partial class LibraryViewModel(AppServices services, KindleViewModel kindle) : ViewModelBase
+public sealed partial class LibraryViewModel(AppServices services, KindleViewModel kindle, Action<long> openLayout) : ViewModelBase
 {
     public ObservableCollection<LibraryItemViewModel> Novels { get; } = [];
     public KindleViewModel Kindle => kindle;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasSelection), nameof(DownloadDescription), nameof(ExportHeader), nameof(ExportDescription), nameof(ExportButton))]
-    [NotifyCanExecuteChangedFor(nameof(DownloadCommand), nameof(SendToKindleCommand), nameof(ExportCommand), nameof(RemoveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DownloadCommand), nameof(SendToKindleCommand), nameof(ExportCommand), nameof(RemoveCommand), nameof(AdjustLayoutCommand))]
     private LibraryItemViewModel? _selected;
 
     public string DownloadDescription => Selected?.IsComic == true
@@ -79,7 +79,7 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
     private double _chaptersToDownload = 50;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(DownloadCommand), nameof(SendToKindleCommand), nameof(ExportCommand), nameof(RemoveCommand), nameof(EjectKindleCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DownloadCommand), nameof(SendToKindleCommand), nameof(ExportCommand), nameof(RemoveCommand), nameof(EjectKindleCommand), nameof(AdjustLayoutCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -204,6 +204,9 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
             Success("Kindle ejetado", await kindle.EjectSelectedAsync());
         });
     }
+
+    [RelayCommand(CanExecute = nameof(CanAct))]
+    private void AdjustLayout() => openLayout(Selected!.Novel.Id);
 
     [RelayCommand]
     private void OpenBooksFolder()

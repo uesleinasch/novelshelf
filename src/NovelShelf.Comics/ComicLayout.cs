@@ -37,8 +37,8 @@ public sealed record ComicLayout
     public double MarginTop { get; init; }
     public double MarginBottom { get; init; }
     public WidePageMode WidePages { get; init; } = WidePageMode.Split;
-    public double Overlap { get; init; }
-    public double CutSearch { get; init; } = 0.3;
+    public double Overlap { get; init; } = 0.05;
+    public double CutSearch { get; init; } = 0.4;
     public double Gamma { get; init; } = 1.0;
 
     public string ToJson() => JsonSerializer.Serialize(this, Json);
