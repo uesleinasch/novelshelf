@@ -143,6 +143,14 @@ Os sites de quadrinhos vêm das **extensões do Mihon** (o leitor de mangá do A
 - **Páginas duplas** (mais largas que altas) viram duas, na ordem de leitura. Com a leitura da direita para a esquerda ligada, a metade direita vem primeiro.
 - **Webtoon** (manhwa/manhua em tira longa): a tira é juntada e fatiada no tamanho exato da tela. O corte procura uma faixa lisa entre quadros para não partir balões, e fatias totalmente em branco são descartadas.
 - **Ajuste à tela:** cada página fica com o tamanho exato do modelo escolhido na página **Kindle** (padrão: Paperwhite 11ª/12ª geração, 1236×1648). As páginas saem em tons de cinza (colorido só no perfil Colorsoft).
+- **Ajuste por obra:** na biblioteca, **Ajustar corte** abre um preview das telas exatas do Kindle. Lá dá para escolher:
+  - formato (páginas ou tira contínua);
+  - margens (sozinho, sem corte ou manual, para dar zoom);
+  - páginas duplas (dividir, manter ou girar);
+  - no webtoon, quanto repetir no topo da tela seguinte e até onde procurar um espaço entre quadros;
+  - tons médios (gama).
+
+  O ajuste fica salvo para aquela obra, e Converter e Enviar passam a usá-lo.
 - **Formato:** o livro é um AZW3 de layout fixo (uma imagem por página, sumário por capítulo). Ele usa o mesmo ASIN e o mesmo nome de arquivo (`hq-<obra>.azw3`), então reenviar substitui o livro.
 
 ## Kindle: detalhes importantes
