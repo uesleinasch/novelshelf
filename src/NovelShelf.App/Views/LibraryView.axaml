@@ -17,10 +17,27 @@
             </StackPanel>
         </Grid>
 
-        <Grid Grid.Row="1">
-            <TextBlock Text="Sua biblioteca está vazia. Use “Buscar novels” ou “Mangás e HQs” para adicionar a primeira."
+        <Grid Grid.Row="1" RowDefinitions="Auto,*">
+            <StackPanel Spacing="8" Margin="0,0,0,8" IsVisible="{Binding HasNovels}">
+                <TextBox Text="{Binding SearchText}" PlaceholderText="Buscar por título ou autor" />
+                <WrapPanel>
+                    <ComboBox ItemsSource="{x:Static vm:LibraryViewModel.KindOptions}" SelectedItem="{Binding KindFilter}"
+                              Width="148" Margin="0,0,8,8" ToolTip.Tip="Tipo de obra" />
+                    <ComboBox ItemsSource="{Binding SiteOptions}" SelectedItem="{Binding SiteFilter}"
+                              Width="148" Margin="0,0,8,8" ToolTip.Tip="Site de origem" />
+                    <ComboBox ItemsSource="{x:Static vm:LibraryViewModel.KindleOptions}" SelectedItem="{Binding KindleFilter}"
+                              Width="148" Margin="0,0,8,8" ToolTip.Tip="Situação no Kindle" />
+                    <ComboBox ItemsSource="{x:Static vm:LibraryViewModel.SortOptions}" SelectedItem="{Binding SortOrder}"
+                              Width="148" Margin="0,0,8,8" ToolTip.Tip="Ordenação" />
+                    <Button Content="Limpar filtros" Command="{Binding ClearFiltersCommand}" IsVisible="{Binding IsFiltered}"
+                            Margin="0,0,8,8" />
+                </WrapPanel>
+            </StackPanel>
+            <TextBlock Grid.Row="1" Text="Sua biblioteca está vazia. Use “Buscar novels” ou “Mangás e HQs” para adicionar a primeira."
                        TextWrapping="Wrap" Opacity="0.7" IsVisible="{Binding !HasNovels}" />
-            <ListBox ItemsSource="{Binding Novels}" SelectedItem="{Binding Selected}" Background="Transparent"
+            <TextBlock Grid.Row="1" Text="Nenhuma obra com esses filtros."
+                       TextWrapping="Wrap" Opacity="0.7" IsVisible="{Binding HasNoMatches}" />
+            <ListBox Grid.Row="1" ItemsSource="{Binding Novels}" SelectedItem="{Binding Selected}" Background="Transparent"
                      IsVisible="{Binding !IsGridView}">
                 <ListBox.ItemTemplate>
                     <DataTemplate x:DataType="vm:LibraryItemViewModel">
@@ -54,7 +71,7 @@
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
-            <ListBox ItemsSource="{Binding Novels}" SelectedItem="{Binding Selected}" Background="Transparent"
+            <ListBox Grid.Row="1" ItemsSource="{Binding Novels}" SelectedItem="{Binding Selected}" Background="Transparent"
                      IsVisible="{Binding IsGridView}">
                 <ListBox.ItemsPanel>
                     <ItemsPanelTemplate>
@@ -108,7 +125,7 @@
                             <TextBlock Text="{Binding Selected.Progress}" />
                             <TextBlock Text="{Binding Selected.KindleStatus}" Opacity="0.8" />
                             <TextBlock Text="{Binding Selected.Novel.Status}" Opacity="0.6" />
-                            <TextBlock Text="{Binding Selected.Novel.SourceName}" Opacity="0.6" FontSize="12" />
+                            <TextBlock Text="{Binding Selected.SiteName}" Opacity="0.6" FontSize="12" />
                         </StackPanel>
                     </Grid>
 
