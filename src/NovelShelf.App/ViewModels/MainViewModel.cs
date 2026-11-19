@@ -12,17 +12,21 @@ public sealed partial class MainViewModel : ViewModelBase
         _services = services;
         Kindle = new KindleViewModel(services, () => OpenBookStyle(null));
         Library = new LibraryViewModel(services, Kindle, OpenLayout);
+        Downloads = new DownloadsViewModel(services);
+        services.Downloads.Updated += Library.OnDownloadsUpdated;
         Search = new SearchViewModel(services, OpenInLibrary);
         Comics = new ComicsViewModel(services, OpenInLibrary);
         Library.Reload();
         _current = Library.HasNovels ? Library : Search;
         _ = Kindle.DetectAsync();
+        services.Downloads.RestorePending();
     }
 
     public SearchViewModel Search { get; }
     public LibraryViewModel Library { get; }
     public KindleViewModel Kindle { get; }
     public ComicsViewModel Comics { get; }
+    public DownloadsViewModel Downloads { get; }
 
     [ObservableProperty]
     private ViewModelBase _current;

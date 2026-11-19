@@ -43,6 +43,17 @@ public sealed partial class LibraryItemViewModel : ViewModelBase
     [ObservableProperty]
     private Bitmap? _cover;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(QueueText), nameof(InQueue), nameof(CanPauseDownload), nameof(CanResumeDownload), nameof(QueueMaximum), nameof(QueueValue))]
+    private DownloadJob? _job;
+
+    public bool InQueue => Job is { IsPending: true } or { State: DownloadState.Failed };
+    public string? QueueText => InQueue ? DownloadText.Describe(Job!) : null;
+    public bool CanPauseDownload => Job?.State is DownloadState.Queued or DownloadState.Running;
+    public bool CanResumeDownload => Job?.State is DownloadState.Paused or DownloadState.Failed;
+    public double QueueMaximum => Math.Max(1, Job?.Requested ?? 1);
+    public double QueueValue => Job?.Done ?? 0;
+
     public string Progress => Novel.RemoteChapterCount is { } total
         ? $"{Novel.DownloadedChapters} de {total} capítulos baixados"
         : $"{Novel.DownloadedChapters} capítulos baixados";
@@ -168,7 +179,7 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DownloadCommand), nameof(SendToKindleCommand), nameof(ExportCommand), nameof(RemoveCommand), nameof(EjectKindleCommand), nameof(AdjustLayoutCommand))]
-    [NotifyCanExecuteChangedFor(nameof(DownloadItemCommand), nameof(SendItemToKindleCommand), nameof(ExportItemCommand), nameof(RemoveItemCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SendItemToKindleCommand), nameof(ExportItemCommand), nameof(RemoveItemCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -208,7 +219,10 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
     {
         var keep = select ?? Selected?.Novel.Id;
         _all = services.Library.GetNovels()
-            .Select(novel => new LibraryItemViewModel(novel, services.Covers, services.Library, this))
+            .Select(novel => new LibraryItemViewModel(novel, services.Covers, services.Library, this)
+            {
+                Job = services.Downloads.Queue.Find(novel.Id),
+            })
             .ToList();
         RebuildSites();
         if (select is not null && _all.FirstOrDefault(n => n.Novel.Id == select) is { } wanted
@@ -250,39 +264,35 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
 
     private bool CanAct() => Selected is not null && !IsBusy;
 
-    [RelayCommand(CanExecute = nameof(CanAct), IncludeCancelCommand = true)]
-    private async Task DownloadAsync(CancellationToken ct)
+    private bool HasSelectionToDownload() => Selected is not null;
+
+    [RelayCommand(CanExecute = nameof(HasSelectionToDownload))]
+    private void Download() => Enqueue(Selected!);
+
+    private void Enqueue(LibraryItemViewModel item)
     {
-        var item = Selected!;
-        var count = Math.Max(1, (int)ChaptersToDownload);
-        await RunAsync("Baixando capítulos", async () =>
+        services.Downloads.Enqueue(item.Novel, (int)ChaptersToDownload);
+        item.Job = services.Downloads.Queue.Find(item.Novel.Id);
+    }
+
+    [RelayCommand]
+    private void PauseDownload(LibraryItemViewModel item) => services.Downloads.Queue.Pause(item.Novel.Id);
+
+    [RelayCommand]
+    private void ResumeDownload(LibraryItemViewModel item) => services.Downloads.Queue.Resume(item.Novel.Id);
+
+    [RelayCommand]
+    private void CancelDownload(LibraryItemViewModel item) => services.Downloads.Queue.Remove(item.Novel.Id);
+
+    public void OnDownloadsUpdated()
+    {
+        foreach (var item in _all)
         {
-            ProgressMaximum = count;
-            ProgressValue = 0;
-            var progress = new Progress<DownloadProgress>(p =>
-            {
-                ProgressValue = p.Done;
-                StatusMessage = $"{p.Done}/{p.Requested} — {p.ChapterTitle}";
-            });
-            DownloadResult result;
-            if (item.IsComic)
-            {
-                StatusMessage = "Conectando à fonte...";
-                await services.Manga.EnsureStartedAsync();
-                services.Library.UpsertComic(await services.Manga.Client.GetComicAsync(item.Novel.SourceId, item.Novel.RemoteKey!, ct));
-                result = await services.ComicDownloader.DownloadNextAsync(item.Novel.Id, count, progress, ct);
-            }
-            else
-            {
-                var novel = await services.Sources.Get(item.Novel.SourceId).GetNovelAsync(item.Novel.Url, ct);
-                services.Library.Upsert(novel);
-                result = await services.Downloader.DownloadNextAsync(item.Novel.Id, count, progress, ct);
-            }
-            Refresh(item);
-            Success("Download concluído", result.ReachedEnd
-                ? $"{result.Downloaded} capítulos baixados. Você chegou ao último capítulo publicado."
-                : $"{result.Downloaded} capítulos baixados.");
-        });
+            var job = services.Downloads.Queue.Find(item.Novel.Id);
+            if (job is not null && (job.Done != item.Job?.Done || job.State != item.Job?.State))
+                Refresh(item);
+            item.Job = job;
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanAct))]
@@ -332,8 +342,12 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
 
     private bool CanEject() => !IsBusy;
 
-    [RelayCommand(CanExecute = nameof(CanEject))]
-    private Task DownloadItemAsync(LibraryItemViewModel item) => RunOnAsync(item, DownloadCommand);
+    [RelayCommand]
+    private void DownloadItem(LibraryItemViewModel item)
+    {
+        Selected = item;
+        Enqueue(item);
+    }
 
     [RelayCommand(CanExecute = nameof(CanEject))]
     private Task SendItemToKindleAsync(LibraryItemViewModel item) => RunOnAsync(item, SendToKindleCommand);
@@ -380,6 +394,7 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
     private void Remove()
     {
         var item = Selected!;
+        services.Downloads.Queue.Remove(item.Novel.Id);
         services.Library.DeleteNovel(item.Novel.Id);
         if (item.IsComic && Directory.Exists(services.ComicDownloader.ChapterRoot(item.Novel.Id)))
             Directory.Delete(services.ComicDownloader.ChapterRoot(item.Novel.Id), recursive: true);
