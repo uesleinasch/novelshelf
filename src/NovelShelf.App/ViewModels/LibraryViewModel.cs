@@ -405,6 +405,7 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
         var item = Selected!;
         services.Downloads.Queue.Remove(item.Novel.Id);
         services.Library.DeleteNovel(item.Novel.Id);
+        services.Covers.Forget(item.Novel.Id);
         if (item.IsComic && Directory.Exists(services.ComicDownloader.ChapterRoot(item.Novel.Id)))
             Directory.Delete(services.ComicDownloader.ChapterRoot(item.Novel.Id), recursive: true);
         Reload();

@@ -169,7 +169,7 @@ public sealed class SuwayomiClient(HttpClient http, Func<Uri?> baseUrl) : IComic
     {
         using var response = await http.GetAsync(url, ct);
         if (!response.IsSuccessStatusCode)
-            throw new HttpRequestException($"O site da fonte não entregou a imagem ({(int)response.StatusCode}).");
+            throw new HttpRequestException($"O site da fonte não entregou a imagem ({(int)response.StatusCode}).", null, response.StatusCode);
         return await response.Content.ReadAsByteArrayAsync(ct);
     }
 

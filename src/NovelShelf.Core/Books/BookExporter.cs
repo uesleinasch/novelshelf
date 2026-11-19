@@ -110,9 +110,9 @@ public sealed class BookExporter(LibraryStore store, AppPaths paths, PoliteHttpC
 
     private async Task<byte[]?> GetCoverAsync(LibraryNovel novel, CancellationToken ct)
     {
-        var cached = Path.Combine(paths.Covers, $"{novel.Id}.jpg");
-        if (File.Exists(cached))
-            return await File.ReadAllBytesAsync(cached, ct);
+        var cache = new CoverCache(paths);
+        if (cache.TryRead(novel.Id, novel.CoverUrl) is { } cached)
+            return cached;
         if (novel.CoverUrl is null)
             return null;
 
@@ -121,7 +121,7 @@ public sealed class BookExporter(LibraryStore store, AppPaths paths, PoliteHttpC
             var bytes = CoverImage.ToJpeg(await http.GetBytesAsync(novel.CoverUrl, ct));
             if (bytes is null)
                 return null;
-            await File.WriteAllBytesAsync(cached, bytes, ct);
+            cache.Save(novel.Id, novel.CoverUrl, bytes);
             return bytes;
         }
         catch (HttpRequestException)

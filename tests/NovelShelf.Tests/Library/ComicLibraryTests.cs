@@ -20,7 +20,7 @@ public sealed class ComicLibraryTests : IDisposable
         _paths = new AppPaths(_dir);
         _paths.EnsureCreated();
         _store = new LibraryStore(_paths.Database);
-        _downloader = new ComicDownloader(_store, _provider, _paths);
+        _downloader = new ComicDownloader(_store, _provider, _paths, sleep: (_, _) => Task.CompletedTask);
     }
 
     [Fact]
