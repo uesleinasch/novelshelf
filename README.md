@@ -87,6 +87,8 @@ Acima da lista ficam a busca por título ou autor e os filtros: tipo (novel ou q
 
 **Atualização automática.** Ao abrir o app (e, se quiser, a cada 1 a 24 horas), o NovelShelf procura capítulos novos das obras que você já baixou até o último capítulo e põe na fila. Quando chegam capítulos novos, aparece um aviso no app e uma notificação do sistema no Linux. Também dá para buscar na hora: botão **Buscar capítulos novos** na Biblioteca. Na página **Kindle**, ligue **Enviar ao conectar o Kindle** e, ao plugar o cabo, o app baixa o que saiu e envia todas as obras com novidades; depois é só ejetar. Mangás e HQs entram na atualização só se você ligar a opção, porque baixam muito mais dados.
 
+**Volumes.** Obra muito longa fica pesada e lenta no Kindle. Nos detalhes da obra, em **Dividir em volumes**, escolha quantos capítulos vão em cada volume (0 = um livro só). Cada volume vira um arquivo próprio, como `Título — Vol. 03 (cap. 201–300)`. Quando saem capítulos novos, só o último volume é gerado e enviado de novo; os anteriores ficam como estão no Kindle. Se você mudar a divisão de uma obra já enviada, no próximo envio o app apaga do Kindle os arquivos antigos dela (só os da pasta `NovelShelf`) e manda os volumes novos. Vale para novels e quadrinhos.
+
 **Estilo do livro.** Na página **Kindle**, em *Estilo dos livros*, você ajusta o recuo da primeira linha, o espaço entre parágrafos, o alinhamento (justificado ou à esquerda) e o título dos capítulos (como no site, só "Capítulo N" ou sem título). A prévia mostra o resultado na hora. Cada novel pode ter um estilo próprio: botão **Estilo do livro** nos detalhes dela. Ao mudar o estilo de uma obra já enviada, ela aparece como "Ajustes novos para o Kindle"; basta enviar de novo. Tamanho e tipo da letra continuam no menu *Aa* do próprio Kindle.
 
 A lista mostra, para cada novel, quantos capítulos estão no PC e quantos já estão no Kindle. Por exemplo: *"Kindle tem 120 capítulos — 15 novos para enviar"*.
@@ -292,7 +294,6 @@ NOVELSHELF_SUWAYOMI_ROOT=/tmp/suwayomi NOVELSHELF_DUMP_DIR=/tmp/azw3 dotnet test
 
 - [ ] MTP no Windows (WPD)
 - [ ] Mais sites de novels
-- [ ] Opção de dividir novels e quadrinhos muito longos em volumes
 - [ ] Guardar as páginas já convertidas para acelerar reenvios
 - [ ] Login e Cloudflare nas fontes de quadrinhos
 - [ ] Compressão PalmDoc no AZW3
