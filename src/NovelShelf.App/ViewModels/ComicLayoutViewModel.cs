@@ -29,7 +29,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
         _rightToLeft = comic.RightToLeft;
         _loading = false;
         _chapter = Chapters.FirstOrDefault();
-        ScheduleRender(immediate: true);
+        ScheduleRender();
     }
 
     public string Title => _comic.Title;
@@ -54,7 +54,15 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     private Bitmap? _preview;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
     private bool _isRendering;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
+    private bool _hasPendingChanges;
+
+    [ObservableProperty]
+    private string? _renderStatus;
 
     [ObservableProperty]
     private string? _message;
@@ -147,6 +155,8 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
         switch (e.PropertyName)
         {
             case nameof(Chapter):
+                ScheduleRender();
+                break;
             case nameof(ModeIndex):
             case nameof(MarginIndex):
             case nameof(MarginLeft):
@@ -159,7 +169,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
             case nameof(Gamma):
             case nameof(RightToLeft):
                 Message = null;
-                ScheduleRender(immediate: e.PropertyName == nameof(Chapter));
+                HasPendingChanges = true;
                 break;
             case nameof(PageIndex):
                 ShowPage();
@@ -167,22 +177,28 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
         }
     }
 
-    private void ScheduleRender(bool immediate)
+    private void ScheduleRender()
     {
         _render?.Cancel();
         _render = new CancellationTokenSource();
-        _ = RenderAsync(_render.Token, immediate ? 0 : 350);
+        _ = RenderAsync(_render.Token);
     }
 
-    private async Task RenderAsync(CancellationToken ct, int delay)
+    private bool CanApply() => HasPendingChanges && !IsRendering;
+
+    [RelayCommand(CanExecute = nameof(CanApply))]
+    private void Apply() => ScheduleRender();
+
+    private async Task RenderAsync(CancellationToken ct)
     {
         if (Chapter is not { } chapter)
             return;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         try
         {
-            if (delay > 0)
-                await Task.Delay(delay, ct);
             IsRendering = true;
+            HasPendingChanges = false;
+            RenderStatus = "Gerando preview...";
             var pages = await SourcePagesAsync(chapter, ct);
             DetectedStrip = ComicPageProcessor.IsWebtoon(pages);
             OnPropertyChanged(nameof(UsesStrip));
@@ -195,6 +211,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
                 PageIndex = LastPageIndex;
             ShowPage();
             IsRendering = false;
+            RenderStatus = $"Preview gerado em {clock.Elapsed.TotalSeconds:0.0} s";
         }
         catch (OperationCanceledException)
         {
@@ -204,6 +221,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
             if (ct.IsCancellationRequested)
                 return;
             IsRendering = false;
+            RenderStatus = null;
             MessageIsError = true;
             Message = $"Não deu para gerar o preview: {e.Message}";
         }
@@ -222,17 +240,13 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
 
     private void ShowPage()
     {
-        var old = Preview;
         if (_rendered.Count == 0)
         {
             Preview = null;
+            return;
         }
-        else
-        {
-            using var stream = new MemoryStream(_rendered[Math.Clamp(PageIndex, 0, _rendered.Count - 1)]);
-            Preview = new Bitmap(stream);
-        }
-        old?.Dispose();
+        using var stream = new MemoryStream(_rendered[Math.Clamp(PageIndex, 0, _rendered.Count - 1)]);
+        Preview = new Bitmap(stream);
     }
 
     private bool CanGoBack() => PageIndex > 0;
@@ -247,6 +261,8 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     [RelayCommand]
     private void Save()
     {
+        if (HasPendingChanges)
+            ScheduleRender();
         _services.Library.SetComicLayout(_comic.Id, Layout);
         _services.Library.SetRightToLeft(_comic.Id, RightToLeft);
         MessageIsError = false;
@@ -264,7 +280,6 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     private void Close()
     {
         _render?.Cancel();
-        Preview?.Dispose();
         _close();
     }
 }
