@@ -1,4 +1,6 @@
 using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Threading;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using NovelShelf.App.Services;
@@ -20,7 +22,15 @@ public partial class App : Application
             desktop.ShutdownRequested += (_, _) => services.Manga.Server.StopNow();
             desktop.Exit += (_, _) => services.Manga.Server.StopNow();
             AppDomain.CurrentDomain.ProcessExit += (_, _) => services.Manga.Server.StopNow();
-            desktop.MainWindow = new MainWindow { DataContext = new MainViewModel(services) };
+            var window = new MainWindow { DataContext = new MainViewModel(services) };
+            desktop.MainWindow = window;
+            Program.Instance?.Listen(() => Dispatcher.UIThread.Post(() =>
+            {
+                if (window.WindowState == WindowState.Minimized)
+                    window.WindowState = WindowState.Normal;
+                window.Show();
+                window.Activate();
+            }));
             if (services.Manga.IsInstalled)
                 _ = StartMangaServerAsync(services.Manga);
         }

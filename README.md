@@ -133,6 +133,7 @@ Os sites de quadrinhos vêm das **extensões do Mihon** (o leitor de mangá do A
   - **Linux:** um vigia ligado ao app encerra o Java quando o app some.
   - **Windows:** um *Job Object* faz o mesmo.
 - Ele usa cerca de 500 MB de RAM enquanto o app está aberto.
+- O NovelShelf abre uma cópia só. Abrir de novo traz a janela que já está aberta para a frente, em vez de subir um segundo servidor.
 
 ### Como as páginas são ajustadas ao Kindle
 
