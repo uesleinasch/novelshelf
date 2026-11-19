@@ -190,6 +190,20 @@
                         </ui:FASettingsExpander.Footer>
                     </ui:FASettingsExpander>
 
+                    <ui:FASettingsExpander Header="Dividir em volumes" Description="{Binding Selected.VolumeSummary}">
+                        <ui:FASettingsExpander.IconSource>
+                            <ui:FASymbolIconSource Symbol="Library" />
+                        </ui:FASettingsExpander.IconSource>
+                        <ui:FASettingsExpander.Footer>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <ui:FANumberBox Value="{Binding Selected.VolumeSize}" Minimum="0" Maximum="5000" SmallChange="50" LargeChange="100"
+                                                SpinButtonPlacementMode="Compact" Width="130"
+                                                ToolTip.Tip="Capítulos por volume. 0 = um livro só." />
+                                <TextBlock Text="capítulos por volume" VerticalAlignment="Center" Opacity="0.8" />
+                            </StackPanel>
+                        </ui:FASettingsExpander.Footer>
+                    </ui:FASettingsExpander>
+
                     <ui:FASettingsExpander Header="Leitura da direita para a esquerda" IsVisible="{Binding Selected.IsComic}"
                                            Description="Ligue para mangá japonês: vira a página para a esquerda e divide páginas duplas na ordem certa.">
                         <ui:FASettingsExpander.IconSource>

@@ -116,8 +116,7 @@ public sealed class AutoSyncService
             {
                 try
                 {
-                    var book = await _services.Delivery.ExportAsync(work);
-                    await _services.Delivery.SendAsync(device, book, work.Id);
+                    await _services.Delivery.SendAsync(device, work);
                     sent.Add(work.Title);
                 }
                 catch (Exception e) when (e is IOException or UnauthorizedAccessException or InvalidOperationException or HttpRequestException)
