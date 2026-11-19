@@ -14,12 +14,17 @@ public sealed partial class MainViewModel : ViewModelBase
         Library = new LibraryViewModel(services, Kindle, OpenLayout);
         Downloads = new DownloadsViewModel(services);
         services.Downloads.Updated += Library.OnDownloadsUpdated;
+        Kindle.Connected += services.AutoSync.OnKindleConnected;
+        services.AutoSync.Message += Library.ShowSyncMessage;
+        services.AutoSync.LibraryChanged += () => Library.Reload();
         Search = new SearchViewModel(services, OpenInLibrary);
         Comics = new ComicsViewModel(services, OpenInLibrary);
         Library.Reload();
         _current = Library.HasNovels ? Library : Search;
-        _ = Kindle.DetectAsync();
         services.Downloads.RestorePending();
+        services.AutoSync.Start();
+        _ = Kindle.DetectAsync();
+        Kindle.StartWatching();
     }
 
     public SearchViewModel Search { get; }

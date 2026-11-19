@@ -318,9 +318,7 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
                 ?? throw new InvalidOperationException("Nenhum Kindle encontrado. Conecte o cabo USB e desbloqueie a tela do Kindle.");
             var book = await ExportBookAsync(item);
             StatusMessage = $"Copiando para {device.Name}...";
-            var result = await services.Sender.SendAsync(device,
-                new SendRequest(book.Azw3Path, book.KindleFileName, book.CoverJpeg, book.ThumbnailFileName));
-            services.Library.MarkSent(item.Novel.Id, book.ChapterCount);
+            var result = await services.Delivery.SendAsync(device, book, item.Novel.Id);
             Refresh(item);
             Success("Enviado", $"{book.ChapterCount} capítulos em {device.Name}: {result.TargetPath}. Ejete o Kindle para ele atualizar a biblioteca.");
         });
@@ -329,7 +327,7 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
     private async Task<ExportedBook> ExportBookAsync(LibraryItemViewModel item)
     {
         if (!item.IsComic)
-            return await services.Exporter.ExportAsync(item.Novel.Id, services.Settings.BookStyle);
+            return await services.Delivery.ExportAsync(item.Novel);
 
         var progress = new Progress<ComicExportProgress>(p =>
         {
@@ -337,7 +335,7 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
             ProgressValue = p.Done;
             StatusMessage = p.Done < p.Total ? $"Ajustando páginas: {p.Done + 1}/{p.Total} — {p.ChapterTitle}" : "Montando o AZW3...";
         });
-        return await services.ComicExporter.ExportAsync(item.Novel.Id, services.KindleProfile, progress);
+        return await services.Delivery.ExportAsync(item.Novel, progress);
     }
 
     private bool CanEject() => !IsBusy;
@@ -432,6 +430,37 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
         {
             IsBusy = false;
         }
+    }
+
+    [ObservableProperty]
+    private string? _syncTitle;
+
+    [ObservableProperty]
+    private string? _syncText;
+
+    [ObservableProperty]
+    private FluentAvalonia.UI.Controls.FAInfoBarSeverity _syncSeverity;
+
+    [ObservableProperty]
+    private bool _isSyncOpen;
+
+    [RelayCommand]
+    private void CheckForNewChapters()
+    {
+        var count = services.AutoSync.StartRound();
+        ShowSyncMessage(new SyncMessage("Capítulos novos", count == 0
+            ? "Nenhuma obra para atualizar. Só entram as obras já baixadas até o último capítulo."
+            : $"Procurando capítulos novos em {count} obras. Acompanhe na página Downloads."));
+    }
+
+    public void ShowSyncMessage(SyncMessage message)
+    {
+        SyncSeverity = message.IsError
+            ? FluentAvalonia.UI.Controls.FAInfoBarSeverity.Error
+            : FluentAvalonia.UI.Controls.FAInfoBarSeverity.Informational;
+        SyncTitle = message.Title;
+        SyncText = message.Text;
+        IsSyncOpen = true;
     }
 
     private void Success(string title, string message)

@@ -5,9 +5,16 @@
              x:Class="NovelShelf.App.Views.LibraryView"
              x:DataType="vm:LibraryViewModel">
     <Grid x:Name="Root" ColumnDefinitions="320,*" RowDefinitions="Auto,*" Margin="24,16">
-        <Grid Grid.ColumnSpan="2" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+        <Grid Grid.ColumnSpan="2" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="0,0,0,12">
             <TextBlock Text="Biblioteca" Theme="{StaticResource TitleTextBlockStyle}" />
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <Button Command="{Binding CheckForNewChaptersCommand}" Margin="0,0,8,0" IsVisible="{Binding HasNovels}"
+                        ToolTip.Tip="Baixa capítulos novos das obras que você já baixou até o fim">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <ui:FASymbolIcon Symbol="Sync" />
+                        <TextBlock Text="Buscar capítulos novos" />
+                    </StackPanel>
+                </Button>
                 <Button Command="{Binding ShowListCommand}" Classes.accent="{Binding !IsGridView}" ToolTip.Tip="Ver em lista">
                     <ui:FASymbolIcon Symbol="List" />
                 </Button>
@@ -15,6 +22,8 @@
                     <ui:FASymbolIcon Symbol="ViewAll" />
                 </Button>
             </StackPanel>
+            <ui:FAInfoBar Grid.Row="1" Grid.ColumnSpan="2" Margin="0,12,0,0" Title="{Binding SyncTitle}" Message="{Binding SyncText}"
+                          Severity="{Binding SyncSeverity}" IsOpen="{Binding IsSyncOpen, Mode=TwoWay}" IsClosable="True" />
         </Grid>
 
         <Grid Grid.Row="1" RowDefinitions="Auto,*">

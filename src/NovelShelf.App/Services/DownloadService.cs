@@ -46,12 +46,19 @@ public sealed class DownloadService
         {
             await _services.Manga.EnsureStartedAsync();
             _services.Library.UpsertComic(await _services.Manga.Client.GetComicAsync(novel.SourceId, novel.RemoteKey!, ct));
-            return await _services.ComicDownloader.DownloadNextAsync(novel.Id, count, progress, ct);
+            return Track(novel.Id, await _services.ComicDownloader.DownloadNextAsync(novel.Id, count, progress, ct));
         }
 
         var details = await _services.Sources.Get(novel.SourceId).GetNovelAsync(novel.Url, ct);
         _services.Library.Upsert(details);
-        return await _services.Downloader.DownloadNextAsync(novel.Id, count, progress, ct);
+        return Track(novel.Id, await _services.Downloader.DownloadNextAsync(novel.Id, count, progress, ct));
+    }
+
+    private DownloadResult Track(long workId, DownloadResult result)
+    {
+        if (result.ReachedEnd || result.Downloaded > 0)
+            _services.Library.SetCaughtUp(workId, result.ReachedEnd);
+        return result;
     }
 
     private void OnQueueChanged()

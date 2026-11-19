@@ -38,6 +38,38 @@
                 <ComboBox ItemsSource="{Binding Profiles}" SelectedItem="{Binding Profile}" MinWidth="280" />
             </ui:FASettingsExpander.Footer>
         </ui:FASettingsExpander>
+        <ui:FASettingsExpander Header="Atualização automática" IsExpanded="True"
+                               Description="Baixa capítulos novos das obras que você já baixou até o fim e, se quiser, envia ao Kindle quando ele é conectado.">
+            <ui:FASettingsExpander.IconSource>
+                <ui:FASymbolIconSource Symbol="Sync" />
+            </ui:FASettingsExpander.IconSource>
+            <ui:FASettingsExpander.Footer>
+                <Button Content="Buscar capítulos novos agora" Command="{Binding CheckNowCommand}" />
+            </ui:FASettingsExpander.Footer>
+            <ui:FASettingsExpanderItem Content="Buscar capítulos novos ao abrir o app">
+                <ui:FASettingsExpanderItem.Footer>
+                    <ToggleSwitch IsChecked="{Binding UpdateOnStart}" OnContent="Sim" OffContent="Não" />
+                </ui:FASettingsExpanderItem.Footer>
+            </ui:FASettingsExpanderItem>
+            <ui:FASettingsExpanderItem Content="Com o app aberto, buscar de novo">
+                <ui:FASettingsExpanderItem.Footer>
+                    <ComboBox ItemsSource="{Binding IntervalOptions}" SelectedItem="{Binding UpdateInterval}" MinWidth="200" />
+                </ui:FASettingsExpanderItem.Footer>
+            </ui:FASettingsExpanderItem>
+            <ui:FASettingsExpanderItem Content="Incluir mangás e HQs" Description="Baixa as páginas dos capítulos novos; usa mais internet e disco.">
+                <ui:FASettingsExpanderItem.Footer>
+                    <ToggleSwitch IsChecked="{Binding UpdateComics}" OnContent="Sim" OffContent="Não" />
+                </ui:FASettingsExpanderItem.Footer>
+            </ui:FASettingsExpanderItem>
+            <ui:FASettingsExpanderItem Content="Enviar ao conectar o Kindle"
+                                       Description="Ao plugar o Kindle, busca capítulos novos e envia todas as obras com novidades. Depois é só ejetar.">
+                <ui:FASettingsExpanderItem.Footer>
+                    <ToggleSwitch IsChecked="{Binding SendOnConnect}" OnContent="Sim" OffContent="Não" />
+                </ui:FASettingsExpanderItem.Footer>
+            </ui:FASettingsExpanderItem>
+        </ui:FASettingsExpander>
+        <TextBlock Text="{Binding SyncMessage}" TextWrapping="Wrap" Opacity="0.8"
+                   IsVisible="{Binding SyncMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
         <ui:FASettingsExpander Header="Estilo dos livros" Description="Recuo, espaço entre parágrafos, alinhamento e título dos capítulos das novels.">
             <ui:FASettingsExpander.IconSource>
                 <ui:FASymbolIconSource Symbol="Font" />
