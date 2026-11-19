@@ -22,7 +22,14 @@ public sealed record LibraryNovel(
     WorkKind Kind = WorkKind.Novel,
     string? RemoteKey = null,
     string? SourceName = null,
-    bool RightToLeft = false);
+    bool RightToLeft = false,
+    bool NeedsResend = false,
+    bool CaughtUp = false,
+    int VolumeSize = 0,
+    int? SentVolumeSize = null)
+{
+    public bool VolumeLayoutChanged => SentAt is not null && (SentVolumeSize ?? 0) != VolumeSize;
+}
 
 public enum WorkKind
 {
@@ -48,3 +55,5 @@ public sealed record StoredChapter(
     string Html,
     Uri? NextUrl,
     DateTimeOffset DownloadedAt);
+
+public sealed record QueuedDownload(long NovelId, int Requested, int Done, bool Paused);

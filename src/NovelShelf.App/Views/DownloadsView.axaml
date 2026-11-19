@@ -1,0 +1,63 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:FluentAvalonia.UI.Controls"
+             xmlns:vm="using:NovelShelf.App.ViewModels"
+             x:Class="NovelShelf.App.Views.DownloadsView"
+             x:DataType="vm:DownloadsViewModel">
+    <Grid RowDefinitions="Auto,Auto,*" Margin="24,16">
+        <Grid ColumnDefinitions="*,Auto">
+            <TextBlock Text="Downloads" Theme="{StaticResource TitleTextBlockStyle}" />
+            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                <Button Command="{Binding PauseAllCommand}" ToolTip.Tip="Pausa tudo o que está na fila">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <ui:FASymbolIcon Symbol="Pause" />
+                        <TextBlock Text="Pausar tudo" />
+                    </StackPanel>
+                </Button>
+                <Button Command="{Binding ResumeAllCommand}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <ui:FASymbolIcon Symbol="Play" />
+                        <TextBlock Text="Retomar tudo" />
+                    </StackPanel>
+                </Button>
+                <Button Content="Limpar concluídos" Command="{Binding ClearFinishedCommand}" />
+            </StackPanel>
+        </Grid>
+        <TextBlock Grid.Row="1" Margin="0,8,0,12" Opacity="0.75" TextWrapping="Wrap"
+                   Text="Obras do mesmo site baixam uma de cada vez, para não sobrecarregar o site. Sites diferentes baixam ao mesmo tempo. A fila continua de onde parou quando você abre o app de novo." />
+
+        <TextBlock Grid.Row="2" Opacity="0.7" IsVisible="{Binding !HasItems}"
+                   Text="Nada na fila. Na Biblioteca, escolha uma obra e clique em Baixar." />
+
+        <ListBox Grid.Row="2" ItemsSource="{Binding Items}" Background="Transparent" IsVisible="{Binding HasItems}">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="vm:DownloadJobViewModel">
+                    <Grid ColumnDefinitions="*,Auto" Margin="0,6">
+                        <StackPanel Spacing="4" VerticalAlignment="Center">
+                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <ProgressBar Minimum="0" Maximum="{Binding Maximum}" Value="{Binding Value}" MaxWidth="520" HorizontalAlignment="Left" Width="520" />
+                            <TextBlock Text="{Binding StateText}" FontSize="12" Opacity="0.75" TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" Margin="12,0,0,0" VerticalAlignment="Center">
+                            <Button Command="{Binding Owner.MoveUpCommand}" CommandParameter="{Binding}" ToolTip.Tip="Subir na fila">
+                                <ui:FASymbolIcon Symbol="ChevronUp" />
+                            </Button>
+                            <Button Command="{Binding Owner.MoveDownCommand}" CommandParameter="{Binding}" ToolTip.Tip="Descer na fila">
+                                <ui:FASymbolIcon Symbol="ChevronDown" />
+                            </Button>
+                            <Button Command="{Binding Owner.PauseCommand}" CommandParameter="{Binding}" IsVisible="{Binding CanPause}" ToolTip.Tip="Pausar">
+                                <ui:FASymbolIcon Symbol="Pause" />
+                            </Button>
+                            <Button Command="{Binding Owner.ResumeCommand}" CommandParameter="{Binding}" IsVisible="{Binding CanResume}" ToolTip.Tip="Retomar">
+                                <ui:FASymbolIcon Symbol="Play" />
+                            </Button>
+                            <Button Command="{Binding Owner.RemoveCommand}" CommandParameter="{Binding}" ToolTip.Tip="Tirar da fila (os capítulos já baixados ficam)">
+                                <ui:FASymbolIcon Symbol="Dismiss" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </Grid>
+</UserControl>

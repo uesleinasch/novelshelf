@@ -1,0 +1,88 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:FluentAvalonia.UI.Controls"
+             xmlns:vm="using:NovelShelf.App.ViewModels"
+             x:Class="NovelShelf.App.Views.BookStyleView"
+             x:DataType="vm:BookStyleViewModel">
+    <Grid RowDefinitions="Auto,*" ColumnDefinitions="*,400" Margin="24,16">
+        <Grid Grid.ColumnSpan="2" ColumnDefinitions="Auto,*" Margin="0,0,0,12">
+            <Button Margin="0,0,12,0" Command="{Binding CloseCommand}" ToolTip.Tip="Voltar">
+                <ui:FASymbolIcon Symbol="Back" />
+            </Button>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                <TextBlock Text="Estilo do livro" Theme="{StaticResource TitleTextBlockStyle}" />
+                <TextBlock Text="{Binding Title}" Opacity="0.75" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+        </Grid>
+
+        <Border Grid.Row="1" Padding="18" CornerRadius="18" Background="#1f1f1f" HorizontalAlignment="Center" VerticalAlignment="Top"
+                MaxWidth="560">
+            <Border Background="#f4f1ea" Padding="28,24">
+                <ScrollViewer MaxHeight="640">
+                    <StackPanel>
+                        <TextBlock Text="{Binding PreviewHeading}" Foreground="#111" FontFamily="serif" FontWeight="Bold"
+                                   FontSize="24" TextAlignment="Center" TextWrapping="Wrap" Margin="0,8,0,18"
+                                   IsVisible="{Binding PreviewHeading, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                        <ItemsControl ItemsSource="{Binding Paragraphs}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:PreviewParagraph">
+                                    <TextBlock Foreground="#111" FontFamily="serif" FontSize="17" LineHeight="25"
+                                               TextWrapping="Wrap" TextAlignment="{Binding Alignment}" Margin="{Binding Margin}">
+                                        <InlineUIContainer>
+                                            <Border Width="{Binding IndentWidth}" Height="1" />
+                                        </InlineUIContainer>
+                                        <Run Text="{Binding Text}" />
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Border>
+
+        <ScrollViewer Grid.Row="1" Grid.Column="1" Margin="20,0,0,0">
+            <StackPanel Spacing="18">
+                <TextBlock Text="{Binding Intro}" TextWrapping="Wrap" Opacity="0.75" />
+
+                <ToggleSwitch IsChecked="{Binding UseDefault}" IsVisible="{Binding IsForNovel}"
+                              OnContent="Usar o estilo padrão" OffContent="Estilo próprio desta novel" />
+
+                <StackPanel Spacing="18" IsEnabled="{Binding CanEdit}">
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="Título do capítulo" FontWeight="SemiBold" />
+                        <ComboBox SelectedIndex="{Binding HeadingIndex}" HorizontalAlignment="Stretch">
+                            <ComboBoxItem Content="Como está no site" />
+                            <ComboBoxItem Content="Só &quot;Capítulo N&quot;" />
+                            <ComboBoxItem Content="Sem título no texto" />
+                        </ComboBox>
+                        <TextBlock Text="O sumário do Kindle sempre mostra o nome de cada capítulo."
+                                   FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="{Binding Indent, StringFormat='Recuo da primeira linha: {0:0.0}'}" FontWeight="SemiBold" />
+                        <Slider Minimum="0" Maximum="3" Value="{Binding Indent}" TickFrequency="0.1" IsSnapToTickEnabled="True" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock Text="{Binding ParagraphSpacing, StringFormat='Espaço entre parágrafos: {0:0.0}'}" FontWeight="SemiBold" />
+                        <Slider Minimum="0" Maximum="2" Value="{Binding ParagraphSpacing}" TickFrequency="0.1" IsSnapToTickEnabled="True" />
+                        <TextBlock Text="Medidas em linhas da letra. Recuo 0 com espaço maior deixa o texto com cara de site."
+                                   FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                    </StackPanel>
+
+                    <ToggleSwitch IsChecked="{Binding Justify}" OnContent="Texto justificado" OffContent="Texto alinhado à esquerda" />
+                </StackPanel>
+
+                <ui:FAInfoBar Title="Estilo" Message="{Binding Message}" IsClosable="False" Severity="Success"
+                              IsOpen="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
+
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Classes="accent" Content="{Binding SaveLabel}" Command="{Binding SaveCommand}" />
+                    <Button Content="Restaurar padrão" Command="{Binding ResetCommand}" />
+                </StackPanel>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

@@ -39,6 +39,9 @@ public sealed class AppServices
         ComicDownloader = new ComicDownloader(Library, client, paths);
         ComicExporter = new ComicExporter(Library, paths, ComicDownloader);
         Covers = new CoverLoader(paths);
+        Downloads = new DownloadService(this);
+        Delivery = new KindleDelivery(this);
+        AutoSync = new AutoSyncService(this);
     }
 
     public AppPaths Paths { get; }
@@ -55,6 +58,9 @@ public sealed class AppServices
     public ComicDownloader ComicDownloader { get; }
     public ComicExporter ComicExporter { get; }
     public CoverLoader Covers { get; }
+    public DownloadService Downloads { get; }
+    public KindleDelivery Delivery { get; }
+    public AutoSyncService AutoSync { get; }
 
     public KindleProfile KindleProfile => KindleProfile.Get(Settings.KindleProfile);
 }

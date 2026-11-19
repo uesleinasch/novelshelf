@@ -10,19 +10,28 @@ public sealed partial class MainViewModel : ViewModelBase
     public MainViewModel(AppServices services)
     {
         _services = services;
-        Kindle = new KindleViewModel(services);
+        Kindle = new KindleViewModel(services, () => OpenBookStyle(null));
         Library = new LibraryViewModel(services, Kindle, OpenLayout);
+        Downloads = new DownloadsViewModel(services);
+        services.Downloads.Updated += Library.OnDownloadsUpdated;
+        Kindle.Connected += services.AutoSync.OnKindleConnected;
+        services.AutoSync.Message += Library.ShowSyncMessage;
+        services.AutoSync.LibraryChanged += () => Library.Reload();
         Search = new SearchViewModel(services, OpenInLibrary);
         Comics = new ComicsViewModel(services, OpenInLibrary);
         Library.Reload();
         _current = Library.HasNovels ? Library : Search;
+        services.Downloads.RestorePending();
+        services.AutoSync.Start();
         _ = Kindle.DetectAsync();
+        Kindle.StartWatching();
     }
 
     public SearchViewModel Search { get; }
     public LibraryViewModel Library { get; }
     public KindleViewModel Kindle { get; }
     public ComicsViewModel Comics { get; }
+    public DownloadsViewModel Downloads { get; }
 
     [ObservableProperty]
     private ViewModelBase _current;
@@ -35,13 +44,27 @@ public sealed partial class MainViewModel : ViewModelBase
 
     private void OpenLayout(long novelId)
     {
-        if (_services.Library.GetNovel(novelId) is not { } comic)
+        if (_services.Library.GetNovel(novelId) is not { } work)
             return;
-        Current = new ComicLayoutViewModel(_services, comic, () =>
+        void Back()
         {
             Library.Reload(novelId);
             Current = Library;
-        });
+        }
+        Current = work.Kind == Core.Library.WorkKind.Comic
+            ? new ComicLayoutViewModel(_services, work, Back)
+            : OpenBookStyle(work, Back);
+    }
+
+    private BookStyleViewModel OpenBookStyle(Core.Library.LibraryNovel? novel, Action? back = null)
+    {
+        var page = new BookStyleViewModel(_services, novel, back ?? (() =>
+        {
+            Library.Reload();
+            Current = Kindle;
+        }));
+        Current = page;
+        return page;
     }
 
     private void OpenInLibrary(long novelId)

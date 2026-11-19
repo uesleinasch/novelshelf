@@ -27,7 +27,7 @@ public sealed class NovelManiaParsingTests
         Assert.Equal("Uma sinopse.", novel.Synopsis);
         Assert.Equal(["Ação", "Fantasia"], novel.Genres);
         Assert.Equal("Em andamento", novel.Status);
-        Assert.Equal(12, novel.ChapterCount);
+        Assert.Null(novel.ChapterCount);
         Assert.Equal("https://novelmania.com.br/novels/livro-teste/capitulos/volume-1-prologo", novel.FirstChapterUrl!.ToString());
         Assert.EndsWith("hero_capa.jpg", novel.CoverUrl!.ToString());
     }

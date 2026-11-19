@@ -83,6 +83,14 @@ Na **Biblioteca**, os botões no canto superior direito trocam entre **lista** e
 
 Acima da lista ficam a busca por título ou autor e os filtros: tipo (novel ou quadrinho), site de origem, situação no Kindle (novos para enviar, em dia, nunca enviados) e a ordenação (atualizados, título, adicionados).
 
+**Downloads.** O botão **Baixar** põe a obra na fila e você pode continuar usando o app. Acompanhe tudo na página **Downloads**: progresso de cada obra, pausar, retomar, tirar da fila e mudar a ordem. Obras do mesmo site baixam uma de cada vez, para não sobrecarregar o site; sites diferentes baixam ao mesmo tempo. Se você fechar o app no meio, a fila volta sozinha na próxima vez.
+
+**Atualização automática.** Ao abrir o app (e, se quiser, a cada 1 a 24 horas), o NovelShelf procura capítulos novos das obras que você já baixou até o último capítulo e põe na fila. Uma obra só conta como "baixada até o fim" depois que um download chega ao último capítulo publicado; para obras adicionadas antes desta versão, clique em **Baixar** uma vez. Quando chegam capítulos novos, aparece um aviso no app e uma notificação do sistema no Linux. Também dá para buscar na hora: botão **Buscar capítulos novos** na Biblioteca. Na página **Kindle**, ligue **Enviar ao conectar o Kindle** e, ao plugar o cabo, o app baixa o que saiu e envia todas as obras com novidades; depois é só ejetar. Mangás e HQs entram na atualização só se você ligar a opção, porque baixam muito mais dados.
+
+**Volumes.** Obra muito longa fica pesada e lenta no Kindle. Nos detalhes da obra, em **Dividir em volumes**, escolha quantos capítulos vão em cada volume (0 = um livro só). Cada volume vira um arquivo próprio, como `Título — Vol. 03 (cap. 201–300)`. A capa de cada volume ganha uma faixa com "VOL. 03" na parte de baixo, para diferenciar os volumes também na grade de capas do Kindle. Quando saem capítulos novos, só o último volume é gerado e enviado de novo; os anteriores ficam como estão no Kindle. Se você mudar a divisão de uma obra já enviada, no próximo envio o app apaga do Kindle os arquivos antigos dela (só os da pasta `NovelShelf`) e manda os volumes novos. Vale para novels e quadrinhos.
+
+**Estilo do livro.** Na página **Kindle**, em *Estilo dos livros*, você ajusta o recuo da primeira linha, o espaço entre parágrafos, o alinhamento (justificado ou à esquerda) e o título dos capítulos (como no site, só "Capítulo N" ou sem título). A prévia mostra o resultado na hora. Cada novel pode ter um estilo próprio: botão **Estilo do livro** nos detalhes dela. Ao mudar o estilo de uma obra já enviada, ela aparece como "Ajustes novos para o Kindle"; basta enviar de novo. Tamanho e tipo da letra continuam no menu *Aa* do próprio Kindle.
+
 A lista mostra, para cada novel, quantos capítulos estão no PC e quantos já estão no Kindle. Por exemplo: *"Kindle tem 120 capítulos — 15 novos para enviar"*.
 
 O botão **Gerar livro** cria o EPUB e o AZW3 sem enviar, para usar em outros leitores. **Abrir pasta** mostra onde os arquivos ficam.
@@ -268,11 +276,13 @@ NOVELSHELF_SUWAYOMI_ROOT=/tmp/suwayomi NOVELSHELF_DUMP_DIR=/tmp/azw3 dotnet test
 - O app é para **leitura pessoal**. Não redistribua os livros gerados: as traduções pertencem às equipes dos sites.
 - Apoie os tradutores. O Novel Mania aceita doações pelo [tipa.ai](https://tipa.ai/novelmania), e o Illusia tem página de apoio no próprio site.
 - Nos quadrinhos, apoie as scans e as editoras oficiais. As extensões são da comunidade Project Nox. O NovelShelf não distribui extensões; você escolhe e instala as que quiser.
-- O app respeita o `robots.txt` e espaça as requisições para não sobrecarregar o site. Não reduza esse intervalo.
+- O app respeita o `robots.txt` e espaça as requisições para não sobrecarregar o site (no mínimo 1,5 s entre páginas do mesmo site). Não reduza esse intervalo.
+- Se o site responder "muitas requisições" (HTTP 429), o app obedece: espera o tempo que o site pedir (ou 15 s, 30 s, 1 min, 2 min, 5 min), deixa aquele site mais devagar por um tempo e, se o bloqueio continuar, pausa as obras daquele site por 10 minutos e retoma sozinho. Na página **Downloads** aparece "Site pediu pausa" com o horário da próxima tentativa.
 - Este projeto não é afiliado ao Novel Mania, ao Illusia nem à Amazon. Kindle é marca da Amazon.
 
 ## Limitações conhecidas
 
+- **Total de capítulos no Novel Mania.** A página da novel só lista o primeiro volume (o resto vem de uma API que o `robots.txt` do site bloqueia), então o app não mostra o total do site, só quantos capítulos você já baixou. O download não é afetado: ele segue o link "próximo capítulo" e passa por todos os volumes.
 - **Windows + Kindle em MTP** (Paperwhite 11ª geração em diante) ainda não é suportado. No Windows, só Kindles que aparecem como unidade de disco.
 - O AZW3 ainda não foi testado em todos os modelos de Kindle. Se algo aparecer errado, abra uma issue com o modelo e a versão do firmware.
 - O texto vai sem compressão PalmDoc. O arquivo fica maior, mas a leitura não muda.
@@ -286,11 +296,9 @@ NOVELSHELF_SUWAYOMI_ROOT=/tmp/suwayomi NOVELSHELF_DUMP_DIR=/tmp/azw3 dotnet test
 
 - [ ] MTP no Windows (WPD)
 - [ ] Mais sites de novels
-- [ ] Opção de dividir novels e quadrinhos muito longos em volumes
 - [ ] Guardar as páginas já convertidas para acelerar reenvios
 - [ ] Login e Cloudflare nas fontes de quadrinhos
 - [ ] Compressão PalmDoc no AZW3
-- [ ] Atualização automática ("baixar capítulos novos de todas as novels")
 
 ## Contribuir
 

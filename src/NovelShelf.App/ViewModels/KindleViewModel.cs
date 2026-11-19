@@ -5,11 +5,112 @@ using FluentAvalonia.UI.Controls;
 using NovelShelf.App.Services;
 using NovelShelf.Comics;
 using NovelShelf.Devices;
+using Avalonia.Threading;
 
 namespace NovelShelf.App.ViewModels;
 
-public sealed partial class KindleViewModel(AppServices services) : ViewModelBase
+public sealed partial class KindleViewModel(AppServices services, Action openBookStyle) : ViewModelBase
 {
+    private readonly HashSet<string> _ejected = [];
+    private DispatcherTimer? _watch;
+    private bool _polling;
+
+    public event Action<KindleDevice>? Connected;
+
+    public IReadOnlyList<Choice<int>> IntervalOptions { get; } = AutoSyncService.IntervalOptions
+        .Select(h => new Choice<int>(h == 0 ? "Só ao abrir o app" : h == 1 ? "A cada 1 hora" : $"A cada {h} horas", h))
+        .ToList();
+
+    public bool UpdateOnStart
+    {
+        get => services.Settings.UpdateOnStart;
+        set => SaveSetting(() => services.Settings.UpdateOnStart = value);
+    }
+
+    public Choice<int>? UpdateInterval
+    {
+        get => IntervalOptions.FirstOrDefault(o => o.Value == services.Settings.UpdateIntervalHours) ?? IntervalOptions[0];
+        set
+        {
+            if (value is null)
+                return;
+            SaveSetting(() => services.Settings.UpdateIntervalHours = value.Value);
+            services.AutoSync.ApplyInterval();
+        }
+    }
+
+    public bool UpdateComics
+    {
+        get => services.Settings.UpdateComics;
+        set => SaveSetting(() => services.Settings.UpdateComics = value);
+    }
+
+    public bool SendOnConnect
+    {
+        get => services.Settings.SendOnConnect;
+        set => SaveSetting(() => services.Settings.SendOnConnect = value);
+    }
+
+    [ObservableProperty]
+    private string? _syncMessage;
+
+    private void SaveSetting(Action apply, [System.Runtime.CompilerServices.CallerMemberName] string? property = null)
+    {
+        apply();
+        services.Settings.Save();
+        OnPropertyChanged(property);
+    }
+
+    [RelayCommand]
+    private void CheckNow()
+    {
+        var count = services.AutoSync.StartRound();
+        SyncMessage = count == 0
+            ? "Nenhuma obra para atualizar. Só entram as obras já baixadas até o último capítulo."
+            : $"Procurando capítulos novos em {count} obras. Acompanhe na página Downloads.";
+    }
+
+    public void StartWatching()
+    {
+        _watch ??= new DispatcherTimer(TimeSpan.FromSeconds(15), DispatcherPriority.Background, async (_, _) => await PollAsync());
+        _watch.Start();
+    }
+
+    private async Task PollAsync()
+    {
+        if (_polling || IsSearching || IsEjecting)
+            return;
+        _polling = true;
+        try
+        {
+            UpdateDevices(await services.Locator.FindAsync());
+        }
+        finally
+        {
+            _polling = false;
+        }
+    }
+
+    private void UpdateDevices(IReadOnlyList<KindleDevice> found)
+    {
+        _ejected.IntersectWith(found.Select(d => d.RootPath));
+        var known = Devices.Select(d => d.RootPath).ToHashSet();
+        var arrived = found.Where(d => !known.Contains(d.RootPath) && !_ejected.Contains(d.RootPath)).ToList();
+        var visible = found.Where(d => !_ejected.Contains(d.RootPath)).ToList();
+        if (!visible.Select(d => d.RootPath).SequenceEqual(Devices.Select(d => d.RootPath)))
+        {
+            Devices.Clear();
+            foreach (var device in visible)
+                Devices.Add(device);
+            Selected = Devices.FirstOrDefault(d => d.RootPath == Selected?.RootPath) ?? Devices.FirstOrDefault();
+        }
+        foreach (var device in arrived)
+            Connected?.Invoke(device);
+    }
+
+    [RelayCommand]
+    private void OpenBookStyle() => openBookStyle();
+
     public ObservableCollection<KindleDevice> Devices { get; } = [];
     public IReadOnlyList<KindleProfile> Profiles => KindleProfile.All;
 
@@ -59,11 +160,8 @@ public sealed partial class KindleViewModel(AppServices services) : ViewModelBas
         IsSearching = true;
         try
         {
-            var found = await services.Locator.FindAsync();
-            Devices.Clear();
-            foreach (var device in found)
-                Devices.Add(device);
-            Selected = Devices.FirstOrDefault(d => d.RootPath == Selected?.RootPath) ?? Devices.FirstOrDefault();
+            _ejected.Clear();
+            UpdateDevices(await services.Locator.FindAsync());
         }
         finally
         {
@@ -95,6 +193,7 @@ public sealed partial class KindleViewModel(AppServices services) : ViewModelBas
         try
         {
             await services.Ejector.EjectAsync(device);
+            _ejected.Add(device.RootPath);
             Devices.Remove(device);
             Selected = Devices.FirstOrDefault();
             return $"{device.Name} ejetado. Pode desconectar o cabo; o Kindle vai atualizar a biblioteca.";

@@ -13,6 +13,11 @@ public sealed class AppSettings
     public string KindleProfile { get; set; } = NovelShelf.Comics.KindleProfile.Default.Id;
     public bool ShowAdultSources { get; set; }
     public bool LibraryGrid { get; set; }
+    public bool UpdateOnStart { get; set; } = true;
+    public int UpdateIntervalHours { get; set; } = 6;
+    public bool UpdateComics { get; set; }
+    public bool SendOnConnect { get; set; }
+    public NovelShelf.Ebook.BookStyle BookStyle { get; set; } = NovelShelf.Ebook.BookStyle.Default;
 
     public static AppSettings Load(string path)
     {
@@ -28,6 +33,7 @@ public sealed class AppSettings
             settings = new AppSettings();
         }
         settings.Path = path;
+        settings.BookStyle = (settings.BookStyle ?? NovelShelf.Ebook.BookStyle.Default).Normalized();
         return settings;
     }
 

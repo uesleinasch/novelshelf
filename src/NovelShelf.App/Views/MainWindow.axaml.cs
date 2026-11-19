@@ -31,6 +31,7 @@ public partial class MainWindow : Window
         {
             "search" => vm.Search,
             "comics" => vm.Comics,
+            "downloads" => vm.Downloads,
             "kindle" => vm.Kindle,
             _ => vm.Library,
         };
@@ -48,7 +49,8 @@ public partial class MainWindow : Window
         {
             SearchViewModel => "search",
             ComicsViewModel => "comics",
-            KindleViewModel => "kindle",
+            DownloadsViewModel => "downloads",
+            KindleViewModel or BookStyleViewModel { IsForNovel: false } => "kindle",
             _ => "library",
         };
         var item = Nav.MenuItems.Concat(Nav.FooterMenuItems)
