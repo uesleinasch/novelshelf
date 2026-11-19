@@ -28,6 +28,7 @@ public static class DownloadText
 {
     public static string Describe(DownloadJob job) => job.State switch
     {
+        DownloadState.Queued when job.RetryAt is { } at => $"Site pediu pausa — tento de novo às {at.ToLocalTime():HH:mm} ({job.Done} de {job.Requested})",
         DownloadState.Queued when job.Done > 0 => $"Na fila — {job.Done} de {job.Requested} capítulos",
         DownloadState.Queued => $"Na fila — {job.Requested} capítulos",
         DownloadState.Running => $"Baixando {job.Done} de {job.Requested}" + (job.Detail is null ? "" : $" — {job.Detail}"),
