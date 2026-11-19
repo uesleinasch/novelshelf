@@ -79,6 +79,8 @@ Os executáveis já trazem o runtime do .NET. Não é preciso instalar nada.
    - **Linux:** usa o `gio`, como o gerenciador de arquivos (disco USB e MTP).
    - **Windows:** usa o "Ejetar" do Explorer.
 
+Na **Biblioteca**, os botões no canto superior direito trocam entre **lista** e **grade de capas**; o app lembra a escolha. Clique com o botão direito numa obra para baixar, enviar, gerar o livro ou remover sem abrir os detalhes.
+
 A lista mostra, para cada novel, quantos capítulos estão no PC e quantos já estão no Kindle. Por exemplo: *"Kindle tem 120 capítulos — 15 novos para enviar"*.
 
 O botão **Gerar livro** cria o EPUB e o AZW3 sem enviar, para usar em outros leitores. **Abrir pasta** mostra onde os arquivos ficam.
@@ -285,8 +287,7 @@ NOVELSHELF_SUWAYOMI_ROOT=/tmp/suwayomi NOVELSHELF_DUMP_DIR=/tmp/azw3 dotnet test
 - [ ] Opção de dividir novels e quadrinhos muito longos em volumes
 - [ ] Guardar as páginas já convertidas para acelerar reenvios
 - [ ] Login e Cloudflare nas fontes de quadrinhos
-- [ ] Alternar lista e grade e filtros na biblioteca
-- [ ] Novel: suporte ao [Illusia](https://illusia.com.br)
+- [ ] Filtros na biblioteca
 - [ ] Compressão PalmDoc no AZW3
 - [ ] Atualização automática ("baixar capítulos novos de todas as novels")
 

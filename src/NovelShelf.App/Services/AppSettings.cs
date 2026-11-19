@@ -12,6 +12,7 @@ public sealed class AppSettings
 
     public string KindleProfile { get; set; } = NovelShelf.Comics.KindleProfile.Default.Id;
     public bool ShowAdultSources { get; set; }
+    public bool LibraryGrid { get; set; }
 
     public static AppSettings Load(string path)
     {
