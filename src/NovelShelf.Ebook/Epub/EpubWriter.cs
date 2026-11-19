@@ -7,12 +7,11 @@ namespace NovelShelf.Ebook.Epub;
 
 public static class EpubWriter
 {
-    private const string Css = """
+    private const string BaseCss = """
         body { font-family: serif; line-height: 1.5; margin: 0 0.5em; }
-        h1 { font-size: 1.4em; text-align: center; margin: 1.5em 0 1em; }
-        p { text-indent: 1.2em; margin: 0 0 0.6em; text-align: justify; }
         .cover { text-align: center; margin: 0; padding: 0; }
         .cover img { max-width: 100%; max-height: 100%; }
+
         """;
 
     public static void Write(BookContent book, Stream output)
@@ -32,7 +31,7 @@ public static class EpubWriter
               </rootfiles>
             </container>
             """, stamp);
-        Add(zip, "OEBPS/style.css", Css, stamp);
+        Add(zip, "OEBPS/style.css", BaseCss + book.EffectiveStyle.ToCss(), stamp);
 
         if (book.CoverJpeg is { } cover)
         {
@@ -47,8 +46,7 @@ public static class EpubWriter
         for (var i = 0; i < book.Chapters.Count; i++)
         {
             var chapter = book.Chapters[i];
-            Add(zip, $"OEBPS/{ChapterFile(i)}", Page(book.Language, chapter.Title,
-                $"<h1>{Escape(chapter.Title)}</h1>\n{chapter.XhtmlBody}"), stamp);
+            Add(zip, $"OEBPS/{ChapterFile(i)}", Page(book.Language, chapter.Title, book.ChapterBody(chapter)), stamp);
         }
 
         Add(zip, "OEBPS/nav.xhtml", Nav(book), stamp);
