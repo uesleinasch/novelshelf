@@ -17,9 +17,25 @@ public partial class App : Application
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)
         {
             var services = new AppServices(AppPaths.Default);
+            desktop.ShutdownRequested += (_, _) => services.Manga.Server.StopNow();
+            desktop.Exit += (_, _) => services.Manga.Server.StopNow();
+            AppDomain.CurrentDomain.ProcessExit += (_, _) => services.Manga.Server.StopNow();
             desktop.MainWindow = new MainWindow { DataContext = new MainViewModel(services) };
+            if (services.Manga.IsInstalled)
+                _ = StartMangaServerAsync(services.Manga);
         }
 
         base.OnFrameworkInitializationCompleted();
+    }
+
+    private static async Task StartMangaServerAsync(MangaBackend manga)
+    {
+        try
+        {
+            await manga.EnsureStartedAsync();
+        }
+        catch (Exception e) when (e is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+        }
     }
 }

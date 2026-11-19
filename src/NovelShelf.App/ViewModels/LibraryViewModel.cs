@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NovelShelf.App.Services;
 using NovelShelf.Core.Books;
+using NovelShelf.Core.Comics;
 using NovelShelf.Core.Downloading;
 using NovelShelf.Core.Library;
 using NovelShelf.Devices;
@@ -13,11 +14,22 @@ namespace NovelShelf.App.ViewModels;
 
 public sealed partial class LibraryItemViewModel : ViewModelBase
 {
-    public LibraryItemViewModel(LibraryNovel novel, CoverLoader covers)
+    private readonly LibraryStore _store;
+
+    public LibraryItemViewModel(LibraryNovel novel, CoverLoader covers, LibraryStore store)
     {
         _novel = novel;
+        _store = store;
+        _rightToLeft = novel.RightToLeft;
         _ = LoadCoverAsync(covers);
     }
+
+    public bool IsComic => Novel.Kind == WorkKind.Comic;
+
+    [ObservableProperty]
+    private bool _rightToLeft;
+
+    partial void OnRightToLeftChanged(bool value) => _store.SetRightToLeft(Novel.Id, value);
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Progress), nameof(KindleStatus), nameof(PendingForKindle))]
@@ -47,9 +59,21 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
     public KindleViewModel Kindle => kindle;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(HasSelection))]
+    [NotifyPropertyChangedFor(nameof(HasSelection), nameof(DownloadDescription), nameof(ExportHeader), nameof(ExportDescription), nameof(ExportButton))]
     [NotifyCanExecuteChangedFor(nameof(DownloadCommand), nameof(SendToKindleCommand), nameof(ExportCommand), nameof(RemoveCommand))]
     private LibraryItemViewModel? _selected;
+
+    public string DownloadDescription => Selected?.IsComic == true
+        ? "Baixa as páginas dos próximos capítulos para o PC."
+        : "Continua do último capítulo salvo no PC.";
+
+    public string ExportHeader => Selected?.IsComic == true ? "Converter para Kindle" : "Arquivos no PC";
+
+    public string ExportDescription => Selected?.IsComic == true
+        ? $"Corta as margens e ajusta as páginas à tela do {services.KindleProfile.Name}. Troque o modelo na página Kindle."
+        : "Gera EPUB e AZW3 com todos os capítulos baixados.";
+
+    public string ExportButton => Selected?.IsComic == true ? "Converter" : "Gerar livro";
 
     [ObservableProperty]
     private double _chaptersToDownload = 50;
@@ -81,7 +105,7 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
         var keep = select ?? Selected?.Novel.Id;
         Novels.Clear();
         foreach (var novel in services.Library.GetNovels())
-            Novels.Add(new LibraryItemViewModel(novel, services.Covers));
+            Novels.Add(new LibraryItemViewModel(novel, services.Covers, services.Library));
         Selected = Novels.FirstOrDefault(n => n.Novel.Id == keep) ?? Novels.FirstOrDefault();
         OnPropertyChanged(nameof(HasNovels));
     }
@@ -102,9 +126,20 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
                 ProgressValue = p.Done;
                 StatusMessage = $"{p.Done}/{p.Requested} — {p.ChapterTitle}";
             });
-            var novel = await services.Sources.Get(item.Novel.SourceId).GetNovelAsync(item.Novel.Url, ct);
-            services.Library.Upsert(novel);
-            var result = await services.Downloader.DownloadNextAsync(item.Novel.Id, count, progress, ct);
+            DownloadResult result;
+            if (item.IsComic)
+            {
+                StatusMessage = "Conectando à fonte...";
+                await services.Manga.EnsureStartedAsync();
+                services.Library.UpsertComic(await services.Manga.Client.GetComicAsync(item.Novel.SourceId, item.Novel.RemoteKey!, ct));
+                result = await services.ComicDownloader.DownloadNextAsync(item.Novel.Id, count, progress, ct);
+            }
+            else
+            {
+                var novel = await services.Sources.Get(item.Novel.SourceId).GetNovelAsync(item.Novel.Url, ct);
+                services.Library.Upsert(novel);
+                result = await services.Downloader.DownloadNextAsync(item.Novel.Id, count, progress, ct);
+            }
             Refresh(item);
             Success("Download concluído", result.ReachedEnd
                 ? $"{result.Downloaded} capítulos baixados. Você chegou ao último capítulo publicado."
@@ -116,10 +151,12 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
     private async Task ExportAsync()
     {
         var item = Selected!;
-        await RunAsync("Gerando livro", async () =>
+        await RunAsync(item.IsComic ? "Convertendo para o Kindle" : "Gerando livro", async () =>
         {
-            var book = await services.Exporter.ExportAsync(item.Novel.Id);
-            Success("Livro gerado", $"EPUB e AZW3 com {book.ChapterCount} capítulos em {services.Paths.Books}");
+            var book = await ExportBookAsync(item);
+            Success(item.IsComic ? "Convertido" : "Livro gerado", book.EpubPath is null
+                ? $"AZW3 com {book.ChapterCount} capítulos em {services.Paths.Books}"
+                : $"EPUB e AZW3 com {book.ChapterCount} capítulos em {services.Paths.Books}");
         });
     }
 
@@ -131,13 +168,28 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
         {
             var device = await kindle.EnsureDeviceAsync()
                 ?? throw new InvalidOperationException("Nenhum Kindle encontrado. Conecte o cabo USB e desbloqueie a tela do Kindle.");
-            var book = await services.Exporter.ExportAsync(item.Novel.Id);
+            var book = await ExportBookAsync(item);
+            StatusMessage = $"Copiando para {device.Name}...";
             var result = await services.Sender.SendAsync(device,
                 new SendRequest(book.Azw3Path, book.KindleFileName, book.CoverJpeg, book.ThumbnailFileName));
             services.Library.MarkSent(item.Novel.Id, book.ChapterCount);
             Refresh(item);
             Success("Enviado", $"{book.ChapterCount} capítulos em {device.Name}: {result.TargetPath}. Ejete o Kindle para ele atualizar a biblioteca.");
         });
+    }
+
+    private async Task<ExportedBook> ExportBookAsync(LibraryItemViewModel item)
+    {
+        if (!item.IsComic)
+            return await services.Exporter.ExportAsync(item.Novel.Id);
+
+        var progress = new Progress<ComicExportProgress>(p =>
+        {
+            ProgressMaximum = Math.Max(1, p.Total);
+            ProgressValue = p.Done;
+            StatusMessage = p.Done < p.Total ? $"Ajustando páginas: {p.Done + 1}/{p.Total} — {p.ChapterTitle}" : "Montando o AZW3...";
+        });
+        return await services.ComicExporter.ExportAsync(item.Novel.Id, services.KindleProfile, progress);
     }
 
     [RelayCommand]
@@ -149,7 +201,10 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
     [RelayCommand(CanExecute = nameof(CanAct))]
     private void Remove()
     {
-        services.Library.DeleteNovel(Selected!.Novel.Id);
+        var item = Selected!;
+        services.Library.DeleteNovel(item.Novel.Id);
+        if (item.IsComic && Directory.Exists(services.ComicDownloader.ChapterRoot(item.Novel.Id)))
+            Directory.Delete(services.ComicDownloader.ChapterRoot(item.Novel.Id), recursive: true);
         Reload();
     }
 

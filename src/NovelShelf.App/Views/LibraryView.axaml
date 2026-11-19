@@ -8,7 +8,7 @@
         <TextBlock Grid.ColumnSpan="2" Text="Biblioteca" Theme="{StaticResource TitleTextBlockStyle}" Margin="0,0,0,12" />
 
         <Grid Grid.Row="1">
-            <TextBlock Text="Sua biblioteca está vazia. Use “Buscar novels” para adicionar a primeira."
+            <TextBlock Text="Sua biblioteca está vazia. Use “Buscar novels” ou “Mangás e HQs” para adicionar a primeira."
                        TextWrapping="Wrap" Opacity="0.7" IsVisible="{Binding !HasNovels}" />
             <ListBox ItemsSource="{Binding Novels}" SelectedItem="{Binding Selected}" Background="Transparent">
                 <ListBox.ItemTemplate>
@@ -44,10 +44,11 @@
                             <TextBlock Text="{Binding Selected.Progress}" />
                             <TextBlock Text="{Binding Selected.KindleStatus}" Opacity="0.8" />
                             <TextBlock Text="{Binding Selected.Novel.Status}" Opacity="0.6" />
+                            <TextBlock Text="{Binding Selected.Novel.SourceName}" Opacity="0.6" FontSize="12" />
                         </StackPanel>
                     </Grid>
 
-                    <ui:FASettingsExpander Header="Baixar capítulos" Description="Continua do último capítulo salvo no PC.">
+                    <ui:FASettingsExpander Header="Baixar capítulos" Description="{Binding DownloadDescription}">
                         <ui:FASettingsExpander.IconSource>
                             <ui:FASymbolIconSource Symbol="Download" />
                         </ui:FASettingsExpander.IconSource>
@@ -73,13 +74,23 @@
                         </ui:FASettingsExpander.Footer>
                     </ui:FASettingsExpander>
 
-                    <ui:FASettingsExpander Header="Arquivos no PC" Description="Gera EPUB e AZW3 com todos os capítulos baixados.">
+                    <ui:FASettingsExpander Header="Leitura da direita para a esquerda" IsVisible="{Binding Selected.IsComic}"
+                                           Description="Ligue para mangá japonês: vira a página para a esquerda e divide páginas duplas na ordem certa.">
+                        <ui:FASettingsExpander.IconSource>
+                            <ui:FASymbolIconSource Symbol="Back" />
+                        </ui:FASettingsExpander.IconSource>
+                        <ui:FASettingsExpander.Footer>
+                            <ToggleSwitch IsChecked="{Binding Selected.RightToLeft}" OnContent="Sim" OffContent="Não" />
+                        </ui:FASettingsExpander.Footer>
+                    </ui:FASettingsExpander>
+
+                    <ui:FASettingsExpander Header="{Binding ExportHeader}" Description="{Binding ExportDescription}">
                         <ui:FASettingsExpander.IconSource>
                             <ui:FASymbolIconSource Symbol="Folder" />
                         </ui:FASettingsExpander.IconSource>
                         <ui:FASettingsExpander.Footer>
                             <StackPanel Orientation="Horizontal" Spacing="8">
-                                <Button Content="Gerar livro" Command="{Binding ExportCommand}" />
+                                <Button Content="{Binding ExportButton}" Command="{Binding ExportCommand}" />
                                 <Button Content="Abrir pasta" Command="{Binding OpenBooksFolderCommand}" />
                             </StackPanel>
                         </ui:FASettingsExpander.Footer>

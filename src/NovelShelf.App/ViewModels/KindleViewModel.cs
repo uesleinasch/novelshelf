@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NovelShelf.App.Services;
+using NovelShelf.Comics;
 using NovelShelf.Devices;
 
 namespace NovelShelf.App.ViewModels;
@@ -9,6 +10,20 @@ namespace NovelShelf.App.ViewModels;
 public sealed partial class KindleViewModel(AppServices services) : ViewModelBase
 {
     public ObservableCollection<KindleDevice> Devices { get; } = [];
+    public IReadOnlyList<KindleProfile> Profiles => KindleProfile.All;
+
+    public KindleProfile Profile
+    {
+        get => services.KindleProfile;
+        set
+        {
+            if (value is null || value.Id == services.Settings.KindleProfile)
+                return;
+            services.Settings.KindleProfile = value.Id;
+            services.Settings.Save();
+            OnPropertyChanged();
+        }
+    }
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(Summary), nameof(IsConnected))]

@@ -30,5 +30,6 @@
     <ProjectReference Include="..\NovelShelf.Sources.NovelMania\NovelShelf.Sources.NovelMania.csproj" />
     <ProjectReference Include="..\NovelShelf.Ebook\NovelShelf.Ebook.csproj" />
     <ProjectReference Include="..\NovelShelf.Devices\NovelShelf.Devices.csproj" />
+    <ProjectReference Include="..\NovelShelf.Suwayomi\NovelShelf.Suwayomi.csproj" />
   </ItemGroup>
 </Project>

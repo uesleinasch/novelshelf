@@ -20,6 +20,14 @@
         </StackPanel>
         <ui:FAInfoBar Title="Nenhum Kindle encontrado" IsOpen="{Binding !IsConnected}" IsClosable="False" Severity="Warning"
                       Message="No Linux o Kindle aparece como disco (USB) ou como MTP no gerenciador de arquivos. Se for MTP, abra-o uma vez no Arquivos/Nautilus e procure de novo." />
+        <ui:FASettingsExpander Header="Modelo do Kindle" Description="Usado para ajustar as páginas de mangás e HQs ao tamanho da tela.">
+            <ui:FASettingsExpander.IconSource>
+                <ui:FASymbolIconSource Symbol="Zoom" />
+            </ui:FASettingsExpander.IconSource>
+            <ui:FASettingsExpander.Footer>
+                <ComboBox ItemsSource="{Binding Profiles}" SelectedItem="{Binding Profile}" MinWidth="280" />
+            </ui:FASettingsExpander.Footer>
+        </ui:FASettingsExpander>
         <ListBox ItemsSource="{Binding Devices}" SelectedItem="{Binding Selected}" Background="Transparent">
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="dev:KindleDevice">
