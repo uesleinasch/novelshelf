@@ -273,6 +273,7 @@ NOVELSHELF_SUWAYOMI_ROOT=/tmp/suwayomi NOVELSHELF_DUMP_DIR=/tmp/azw3 dotnet test
 
 ## Limitações conhecidas
 
+- **Total de capítulos no Novel Mania.** A página da novel só lista o primeiro volume (o resto vem de uma API que o `robots.txt` do site bloqueia), então o app não mostra o total do site, só quantos capítulos você já baixou. O download não é afetado: ele segue o link "próximo capítulo" e passa por todos os volumes.
 - **Windows + Kindle em MTP** (Paperwhite 11ª geração em diante) ainda não é suportado. No Windows, só Kindles que aparecem como unidade de disco.
 - O AZW3 ainda não foi testado em todos os modelos de Kindle. Se algo aparecer errado, abra uma issue com o modelo e a versão do firmware.
 - O texto vai sem compressão PalmDoc. O arquivo fica maior, mas a leitura não muda.
