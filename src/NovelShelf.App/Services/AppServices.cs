@@ -6,6 +6,7 @@ using NovelShelf.Core.Library;
 using NovelShelf.Core.Net;
 using NovelShelf.Core.Sources;
 using NovelShelf.Devices;
+using NovelShelf.Sources.Illusia;
 using NovelShelf.Sources.NovelMania;
 using NovelShelf.Suwayomi;
 
@@ -19,7 +20,7 @@ public sealed class AppServices
         Paths = paths;
         Settings = AppSettings.Load(paths.Settings);
         Http = new PoliteHttpClient(TimeSpan.FromSeconds(1.5));
-        Sources = new SourceRegistry([new NovelManiaSource(Http)]);
+        Sources = new SourceRegistry([new NovelManiaSource(Http), new IllusiaSource(Http)]);
         Library = new LibraryStore(paths.Database);
         Downloader = new ChapterDownloader(Library, Sources);
         Exporter = new BookExporter(Library, paths, Http);

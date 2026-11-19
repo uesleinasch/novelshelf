@@ -5,6 +5,7 @@
     <Project Path="src/NovelShelf.Core/NovelShelf.Core.csproj" />
     <Project Path="src/NovelShelf.Devices/NovelShelf.Devices.csproj" />
     <Project Path="src/NovelShelf.Ebook/NovelShelf.Ebook.csproj" />
+    <Project Path="src/NovelShelf.Sources.Illusia/NovelShelf.Sources.Illusia.csproj" />
     <Project Path="src/NovelShelf.Sources.NovelMania/NovelShelf.Sources.NovelMania.csproj" />
     <Project Path="src/NovelShelf.Suwayomi/NovelShelf.Suwayomi.csproj" />
   </Folder>
