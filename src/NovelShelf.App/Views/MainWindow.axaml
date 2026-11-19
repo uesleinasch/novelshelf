@@ -1,0 +1,39 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:ui="using:FluentAvalonia.UI.Controls"
+        xmlns:vm="using:NovelShelf.App.ViewModels"
+        x:Class="NovelShelf.App.Views.MainWindow"
+        x:DataType="vm:MainViewModel"
+        Icon="/Assets/avalonia-logo.ico"
+        Title="NovelShelf"
+        Width="1180" Height="760" MinWidth="820" MinHeight="560">
+
+    <ui:FANavigationView x:Name="Nav"
+                         PaneDisplayMode="Left"
+                         IsSettingsVisible="False"
+                         IsBackButtonVisible="False"
+                         OpenPaneLength="220"
+                         PaneTitle="NovelShelf">
+        <ui:FANavigationView.MenuItems>
+            <ui:FANavigationViewItem Content="Biblioteca" Tag="library">
+                <ui:FANavigationViewItem.IconSource>
+                    <ui:FASymbolIconSource Symbol="Library" />
+                </ui:FANavigationViewItem.IconSource>
+            </ui:FANavigationViewItem>
+            <ui:FANavigationViewItem Content="Buscar novels" Tag="search">
+                <ui:FANavigationViewItem.IconSource>
+                    <ui:FASymbolIconSource Symbol="Find" />
+                </ui:FANavigationViewItem.IconSource>
+            </ui:FANavigationViewItem>
+        </ui:FANavigationView.MenuItems>
+        <ui:FANavigationView.FooterMenuItems>
+            <ui:FANavigationViewItem Content="{Binding Kindle.Summary}" Tag="kindle">
+                <ui:FANavigationViewItem.IconSource>
+                    <ui:FASymbolIconSource Symbol="Phone" />
+                </ui:FANavigationViewItem.IconSource>
+            </ui:FANavigationViewItem>
+        </ui:FANavigationView.FooterMenuItems>
+
+        <ContentControl Content="{Binding Current}" />
+    </ui:FANavigationView>
+</Window>

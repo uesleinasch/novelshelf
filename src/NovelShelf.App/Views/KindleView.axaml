@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:FluentAvalonia.UI.Controls"
+             xmlns:vm="using:NovelShelf.App.ViewModels"
+             xmlns:dev="using:NovelShelf.Devices"
+             x:Class="NovelShelf.App.Views.KindleView"
+             x:DataType="vm:KindleViewModel">
+    <StackPanel Margin="24,16" Spacing="16" MaxWidth="760" HorizontalAlignment="Left">
+        <TextBlock Text="Kindle" Theme="{StaticResource TitleTextBlockStyle}" />
+        <TextBlock TextWrapping="Wrap" Opacity="0.8"
+                   Text="Conecte o Kindle no cabo USB e desbloqueie a tela. Os livros vão para documents/NovelShelf. Ao reenviar uma novel, o arquivo é substituído e o Kindle mantém a página onde você parou." />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+            <Button Classes="accent" Command="{Binding DetectCommand}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <ui:FASymbolIcon Symbol="Refresh" />
+                    <TextBlock Text="Procurar Kindle" />
+                </StackPanel>
+            </Button>
+            <ui:FAProgressRing IsIndeterminate="True" Width="20" Height="20" IsVisible="{Binding IsSearching}" />
+        </StackPanel>
+        <ui:FAInfoBar Title="Nenhum Kindle encontrado" IsOpen="{Binding !IsConnected}" IsClosable="False" Severity="Warning"
+                      Message="No Linux o Kindle aparece como disco (USB) ou como MTP no gerenciador de arquivos. Se for MTP, abra-o uma vez no Arquivos/Nautilus e procure de novo." />
+        <ListBox ItemsSource="{Binding Devices}" SelectedItem="{Binding Selected}" Background="Transparent">
+            <ListBox.ItemTemplate>
+                <DataTemplate x:DataType="dev:KindleDevice">
+                    <StackPanel Spacing="2" Margin="0,4">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Connection}" FontSize="12" Opacity="0.7" />
+                        <TextBlock Text="{Binding RootPath}" FontSize="12" Opacity="0.6" />
+                    </StackPanel>
+                </DataTemplate>
+            </ListBox.ItemTemplate>
+        </ListBox>
+    </StackPanel>
+</UserControl>
