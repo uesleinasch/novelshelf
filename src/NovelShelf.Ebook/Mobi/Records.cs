@@ -12,6 +12,7 @@ internal enum ExthType : uint
     PublishingDate = 106,
     Contributor = 108,
     Asin = 113,
+    OriginalResolution = 307,
     FixedLayout = 122,
     Kf8CountResources = 125,
     Kf8CoverUri = 129,

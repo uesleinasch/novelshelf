@@ -26,6 +26,7 @@ public sealed class MobiBook
     public bool FixedLayout { get; init; }
     public bool RightToLeft { get; init; }
     public bool Vertical { get; init; }
+    public (int Width, int Height)? OriginalResolution { get; init; }
     public IReadOnlyList<MobiChapter> Chapters { get; init; } = [];
     public IReadOnlyList<string> CssFlows { get; init; } = [];
     public IReadOnlyList<byte[]> Images { get; init; } = [];
@@ -38,6 +39,9 @@ public sealed class MobiBook
     public string ThumbnailFileName => $"thumbnail_{Asin}_EBOK_portrait.jpg";
 
     public void Write(Stream output) => Realize().WriteTo(output);
+
+    public static string EmbedUri(int imageIndex, string mime = "image/jpeg") =>
+        $"kindle:embed:{MobiEncoding.To32(imageIndex + 1)}?mime={mime}";
 
     internal PalmDatabase Realize()
     {
@@ -134,6 +138,8 @@ public sealed class MobiBook
         exth.AddString(ExthType.DocType, string.IsNullOrEmpty(DocType) ? "EBOK" : DocType);
         if (FixedLayout)
             exth.AddString(ExthType.FixedLayout, "true");
+        if (OriginalResolution is { } resolution)
+            exth.AddString(ExthType.OriginalResolution, $"{resolution.Width}x{resolution.Height}");
         if (RightToLeft)
         {
             exth.AddString(ExthType.PrimaryWritingMode, Vertical ? "vertical-rl" : "horizontal-rl");
@@ -191,6 +197,9 @@ public sealed class MobiBook
         sb.Append("  <head>\n");
         sb.Append("    <title>").Append(SecurityElement.Escape(Title)).Append("</title>\n");
         sb.Append("    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"/>");
+        if (FixedLayout && OriginalResolution is { } viewport)
+            sb.Append("\n    <meta name=\"viewport\" content=\"width=").Append(viewport.Width)
+                .Append(", height=").Append(viewport.Height).Append("\"/>");
         for (var i = 0; i < CssFlows.Count; i++)
             sb.Append("\n    <link rel=\"stylesheet\" type=\"text/css\" href=\"kindle:flow:")
                 .Append(MobiEncoding.To32(i + 1)).Append("?mime=text/css\"/>");
