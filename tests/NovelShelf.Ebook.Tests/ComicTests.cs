@@ -232,6 +232,36 @@ public sealed class ComicTests
     }
 
     [Fact]
+    public void Strip_screens_start_at_the_art_instead_of_a_white_gutter()
+    {
+        var strip = Image(800, 6000, c =>
+        {
+            for (var y = 0; y < 6000; y += 1400)
+                c.DrawRect(0, y + 600, 800, 800, new SKPaint { Color = SKColors.Black });
+        });
+
+        var output = ComicPageProcessor.ProcessStrip([strip], new ComicPageOptions(Paperwhite, Layout: new ComicLayout { Overlap = 0, CutSearch = 0 }), TestContext.Current.CancellationToken);
+
+        Assert.NotEmpty(output);
+        foreach (var jpeg in output)
+        {
+            using var screen = Decode(jpeg);
+            Assert.True(screen.GetPixel(400, 2).Red < 100, "a tela deveria começar no desenho");
+        }
+    }
+
+    [Fact]
+    public void Cover_fills_the_whole_screen()
+    {
+        var cover = Image(600, 600, c => c.Clear(SKColors.Black));
+
+        using var result = Decode(ComicPageProcessor.ProcessCover(cover, Paperwhite)!);
+
+        Assert.Equal((1236, 1648), (result.Width, result.Height));
+        Assert.True(result.GetPixel(618, 3).Red < 30 && result.GetPixel(618, 1644).Red < 30, "capa não pode ter faixa branca");
+    }
+
+    [Fact]
     public void Comic_book_is_fixed_layout_kf8_with_one_image_per_page()
     {
         var page = Image(600, 900, c => c.DrawRect(50, 50, 500, 800, new SKPaint { Color = SKColors.Black }), SKEncodedImageFormat.Jpeg);

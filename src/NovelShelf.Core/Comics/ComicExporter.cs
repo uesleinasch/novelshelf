@@ -52,8 +52,6 @@ public sealed class ComicExporter(LibraryStore store, AppPaths paths, ComicDownl
         if (!File.Exists(file))
             return null;
         var bytes = await File.ReadAllBytesAsync(file, ct);
-        var cover = new ComicLayout { Mode = ComicReadingMode.Pages, Margins = MarginMode.Off, WidePages = WidePageMode.Keep };
-        return ComicPageProcessor.ProcessPage(bytes, options with { Layout = cover })
-            .FirstOrDefault();
+        return ComicPageProcessor.ProcessCover(bytes, options.Profile);
     }
 }

@@ -94,12 +94,20 @@ public static class ComicPageProcessor
                 if (image is null)
                     continue;
                 strip.Append(image);
-                while (strip.Rows >= profile.Height + profile.Height / 4)
+                while (true)
+                {
+                    strip.SkipLeadingWhite(UniformRowRange);
+                    if (strip.Rows < profile.Height + profile.Height / 4)
+                        break;
                     TakeSlice(strip, profile.Height, minimumCut, keep, slices);
+                }
             }
         }
-        while (strip.Rows > keep + profile.Height / 20)
+        while (true)
         {
+            strip.SkipLeadingWhite(UniformRowRange);
+            if (strip.Rows <= keep + profile.Height / 20)
+                break;
             if (strip.Rows <= profile.Height)
             {
                 var rows = strip.Rows;
@@ -114,6 +122,20 @@ public static class ComicPageProcessor
         var output = new byte[slices.Count][];
         Parallel.For(0, slices.Count, parallel, i => output[i] = EncodeSlice(slices[i].Rows, slices[i].Count, options));
         return [.. output];
+    }
+
+    public static byte[]? ProcessCover(byte[] data, KindleProfile profile)
+    {
+        var source = Raster.Decode(data, profile.Color);
+        if (source is null)
+            return null;
+        var scale = Math.Max((double)profile.Width / source.Width, (double)profile.Height / source.Height);
+        var width = Math.Max(profile.Width, (int)Math.Round(source.Width * scale));
+        var height = Math.Max(profile.Height, (int)Math.Round(source.Height * scale));
+        var filled = source.Resize(width, height);
+        var left = (width - profile.Width) / 2;
+        var top = (height - profile.Height) / 2;
+        return filled.Crop(new SKRectI(left, top, left + profile.Width, top + profile.Height)).EncodeJpeg(90);
     }
 
     private static Raster? PrepareStripImage(byte[] data, KindleProfile profile, ComicLayout layout)

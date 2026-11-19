@@ -53,6 +53,22 @@ internal sealed class StripBuffer(int width, int bytesPerPixel)
     private int Luma(byte[] data, int i) =>
         bytesPerPixel == 1 ? data[i] : (data[i] * 299 + data[i + 1] * 587 + data[i + 2] * 114) / 1000;
 
+    public void SkipLeadingWhite(int uniformRange, int whiteLevel = 235)
+    {
+        var skip = 0;
+        while (skip < _rows)
+        {
+            var (min, max) = RowRange(_data, skip);
+            if (min < whiteLevel || max - min > uniformRange)
+                break;
+            skip++;
+        }
+        if (skip == 0)
+            return;
+        Buffer.BlockCopy(_data, skip * RowBytes, _data, 0, (_rows - skip) * RowBytes);
+        _rows -= skip;
+    }
+
     public byte[] Take(int rows, int keep)
     {
         var slice = _data[..(rows * RowBytes)];
