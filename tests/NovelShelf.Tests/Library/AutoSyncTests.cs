@@ -113,7 +113,12 @@ public sealed class AutoSyncTests
             {
                 raw.Open();
                 using var cmd = raw.CreateCommand();
-                cmd.CommandText = "ALTER TABLE novels DROP COLUMN caught_up; PRAGMA user_version = 4;";
+                cmd.CommandText = """
+                    ALTER TABLE novels DROP COLUMN caught_up;
+                    ALTER TABLE novels DROP COLUMN volume_size;
+                    ALTER TABLE novels DROP COLUMN sent_volume_size;
+                    PRAGMA user_version = 4;
+                    """;
                 cmd.ExecuteNonQuery();
             }
 
