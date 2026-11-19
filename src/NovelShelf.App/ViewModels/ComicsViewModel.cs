@@ -405,12 +405,12 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
         if (Details is not { } details)
             return;
         var comic = services.Library.UpsertComic(details);
+        services.Covers.Forget(comic.Id);
         if (details.ThumbnailUrl is { } thumbnail)
         {
             try
             {
-                var bytes = await services.Manga.Client.GetBytesAsync(thumbnail);
-                await File.WriteAllBytesAsync(Path.Combine(services.Paths.Covers, $"{comic.Id}.jpg"), bytes);
+                services.Covers.Store(comic.Id, await services.Manga.Client.GetBytesAsync(thumbnail));
             }
             catch (Exception e) when (e is HttpRequestException or TaskCanceledException or IOException)
             {

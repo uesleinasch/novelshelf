@@ -278,6 +278,7 @@ NOVELSHELF_SUWAYOMI_ROOT=/tmp/suwayomi NOVELSHELF_DUMP_DIR=/tmp/azw3 dotnet test
 - Nos quadrinhos, apoie as scans e as editoras oficiais. As extensões são da comunidade Project Nox. O NovelShelf não distribui extensões; você escolhe e instala as que quiser.
 - O app respeita o `robots.txt` e espaça as requisições para não sobrecarregar o site (no mínimo 1,5 s entre páginas do mesmo site). Não reduza esse intervalo.
 - Se o site responder "muitas requisições" (HTTP 429), o app obedece: espera o tempo que o site pedir (ou 15 s, 30 s, 1 min, 2 min, 5 min), deixa aquele site mais devagar por um tempo e, se o bloqueio continuar, pausa as obras daquele site por 10 minutos e retoma sozinho. Na página **Downloads** aparece "Site pediu pausa" com o horário da próxima tentativa.
+- Nos quadrinhos vale o mesmo: as páginas são baixadas com intervalo por fonte, e uma página que falhar (o servidor de mangás devolve 500 quando a fonte recusa) é tentada de novo com espera crescente, sem jogar fora as páginas já baixadas do capítulo. Se a fonte continuar recusando, a obra pausa e retoma sozinha.
 - Este projeto não é afiliado ao Novel Mania, ao Illusia nem à Amazon. Kindle é marca da Amazon.
 
 ## Limitações conhecidas
