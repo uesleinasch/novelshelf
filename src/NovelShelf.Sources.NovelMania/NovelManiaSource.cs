@@ -91,7 +91,7 @@ public sealed partial class NovelManiaSource(PoliteHttpClient http) : INovelSour
             : null;
 
         return new NovelDetails(SourceId, slug, url, title, author, synopsis, cover, genres, status,
-            ParseChapterCount(doc), first);
+            ChapterCount: null, first);
     }
 
     public ChapterPage ParseChapter(string html, Uri url)
@@ -122,17 +122,6 @@ public sealed partial class NovelManiaSource(PoliteHttpClient http) : INovelSour
         foreach (var hidden in h1.QuerySelectorAll(".sr-only").ToList())
             hidden.Remove();
         return h1.TextContent.Trim();
-    }
-
-    private static int? ParseChapterCount(IDocument doc)
-    {
-        foreach (var span in doc.QuerySelectorAll("span"))
-        {
-            var match = ChapterCountRegex().Match(span.TextContent.Trim());
-            if (match.Success)
-                return int.Parse(match.Groups[1].Value);
-        }
-        return null;
     }
 
     private static Uri? PickCover(IElement img)
@@ -180,7 +169,4 @@ public sealed partial class NovelManiaSource(PoliteHttpClient http) : INovelSour
 
     [GeneratedRegex(@"^/novels/[a-z0-9-]+$")]
     private static partial Regex NovelPathRegex();
-
-    [GeneratedRegex(@"^(\d+)\s+cap[ií]tulos?$", RegexOptions.IgnoreCase)]
-    private static partial Regex ChapterCountRegex();
 }
