@@ -23,7 +23,8 @@ public sealed record LibraryNovel(
     string? RemoteKey = null,
     string? SourceName = null,
     bool RightToLeft = false,
-    bool NeedsResend = false);
+    bool NeedsResend = false,
+    bool CaughtUp = false);
 
 public enum WorkKind
 {

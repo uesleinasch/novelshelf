@@ -128,6 +128,20 @@ public sealed class LibraryStore
                 COMMIT;
                 """);
         }
+
+        if (ScalarLong(db, "PRAGMA user_version") < 5)
+        {
+            Execute(db, """
+                BEGIN;
+                ALTER TABLE novels ADD COLUMN caught_up INTEGER NOT NULL DEFAULT 0;
+                UPDATE novels SET caught_up = 1
+                WHERE remote_chapter_count IS NOT NULL
+                  AND (SELECT COUNT(*) FROM chapters c WHERE c.novel_id = novels.id)
+                    + (SELECT COUNT(*) FROM comic_chapters cc WHERE cc.novel_id = novels.id) >= remote_chapter_count;
+                PRAGMA user_version = 5;
+                COMMIT;
+                """);
+        }
     }
 
     public ComicLayout GetComicLayout(long novelId)
@@ -402,6 +416,12 @@ public sealed class LibraryStore
         return list;
     }
 
+    public void SetCaughtUp(long novelId, bool caughtUp)
+    {
+        using var db = Open();
+        Execute(db, "UPDATE novels SET caught_up = $value WHERE id = $id", ("$value", caughtUp ? 1 : 0), ("$id", novelId));
+    }
+
     public void MarkSent(long novelId, int chapterCount)
     {
         using var db = Open();
@@ -417,7 +437,7 @@ public sealed class LibraryStore
                    (SELECT COUNT(*) FROM chapters c WHERE c.novel_id = n.id)
                      + (SELECT COUNT(*) FROM comic_chapters cc WHERE cc.novel_id = n.id),
                    n.sent_chapter_count, n.added_at, n.updated_at, n.sent_at,
-                   n.kind, n.remote_key, n.source_name, n.right_to_left, n.needs_resend
+                   n.kind, n.remote_key, n.source_name, n.right_to_left, n.needs_resend, n.caught_up
             FROM novels n
             {tail}
             """, args);
@@ -448,7 +468,8 @@ public sealed class LibraryStore
                 RemoteKey: NullableString(r, 19),
                 SourceName: NullableString(r, 20),
                 RightToLeft: r.GetInt64(21) != 0,
-                NeedsResend: r.GetInt64(22) != 0));
+                NeedsResend: r.GetInt64(22) != 0,
+                CaughtUp: r.GetInt64(23) != 0));
         }
         return list;
     }
