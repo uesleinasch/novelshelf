@@ -2,18 +2,26 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="using:FluentAvalonia.UI.Controls"
              xmlns:vm="using:NovelShelf.App.ViewModels"
+             xmlns:core="using:NovelShelf.Core.Sources"
              x:Class="NovelShelf.App.Views.SearchView"
              x:DataType="vm:SearchViewModel">
     <Grid RowDefinitions="Auto,Auto,*" ColumnDefinitions="*,380" Margin="24,16">
         <TextBlock Grid.ColumnSpan="2" Text="Buscar novels" Theme="{StaticResource TitleTextBlockStyle}" Margin="0,0,0,12" />
 
-        <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="*,Auto" Margin="0,0,0,16">
-            <TextBox Text="{Binding Query}" PlaceholderText="Nome da novel ou link do Novel Mania">
+        <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,16">
+            <ComboBox ItemsSource="{Binding Sources}" SelectedItem="{Binding Source}" MinWidth="150" Margin="0,0,8,0" VerticalAlignment="Stretch">
+                <ComboBox.ItemTemplate>
+                    <DataTemplate x:DataType="core:INovelSource">
+                        <TextBlock Text="{Binding Name}" />
+                    </DataTemplate>
+                </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBox Grid.Column="1" Text="{Binding Query}" PlaceholderText="Nome da novel ou link (Novel Mania, Illusia)">
                 <TextBox.KeyBindings>
                     <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
                 </TextBox.KeyBindings>
             </TextBox>
-            <Button Grid.Column="1" Classes="accent" Margin="8,0,0,0" Command="{Binding SearchCommand}">
+            <Button Grid.Column="2" Classes="accent" Margin="8,0,0,0" Command="{Binding SearchCommand}">
                 <StackPanel Orientation="Horizontal" Spacing="6">
                     <ui:FASymbolIcon Symbol="Find" />
                     <TextBlock Text="Buscar" />
