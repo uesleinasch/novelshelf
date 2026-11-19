@@ -66,7 +66,7 @@ public sealed class SuwayomiClient(HttpClient http, Func<Uri?> baseUrl) : IComic
 
     public async Task<IReadOnlyList<ComicSourceInfo>> GetSourcesAsync(CancellationToken ct = default)
     {
-        var data = await GraphAsync("{ sources { nodes { id name displayName lang contentWarning supportsLatest } } }", null, ct);
+        var data = await GraphAsync("{ sources { nodes { id name displayName lang contentWarning supportsLatest iconUrl } } }", null, ct);
         return data["sources"]!["nodes"]!.AsArray()
             .Select(n => n!)
             .Where(n => (string?)n["id"] != "0")
@@ -75,7 +75,8 @@ public sealed class SuwayomiClient(HttpClient http, Func<Uri?> baseUrl) : IComic
                 (string?)n["name"] ?? (string)n["displayName"]!,
                 (string?)n["lang"] ?? "",
                 ParseWarning((string?)n["contentWarning"]) == ContentWarning.Nsfw,
-                (bool?)n["supportsLatest"] ?? false))
+                (bool?)n["supportsLatest"] ?? false,
+                Absolute((string?)n["iconUrl"])))
             .OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
     }

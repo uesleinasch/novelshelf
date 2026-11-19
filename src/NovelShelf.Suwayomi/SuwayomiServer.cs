@@ -120,9 +120,10 @@ public sealed class SuwayomiServer(SuwayomiPaths paths, SuwayomiInstaller instal
 
     public void StopNow()
     {
-        var process = _process;
+        var process = Interlocked.Exchange(ref _process, null);
         if (process is null)
             return;
+        BaseUrl = null;
         try
         {
             if (!OperatingSystem.IsWindows() && !process.HasExited)
@@ -133,7 +134,8 @@ public sealed class SuwayomiServer(SuwayomiPaths paths, SuwayomiInstaller instal
         catch (Exception e) when (e is InvalidOperationException or IOException or System.ComponentModel.Win32Exception)
         {
         }
-        _job?.Dispose();
+        process.Dispose();
+        Interlocked.Exchange(ref _job, null)?.Dispose();
         TryDelete(paths.PidFile);
     }
 
@@ -141,8 +143,7 @@ public sealed class SuwayomiServer(SuwayomiPaths paths, SuwayomiInstaller instal
 
     private async Task StopCoreAsync()
     {
-        var process = _process;
-        _process = null;
+        var process = Interlocked.Exchange(ref _process, null);
         BaseUrl = null;
         if (process is not null)
         {
@@ -170,8 +171,7 @@ public sealed class SuwayomiServer(SuwayomiPaths paths, SuwayomiInstaller instal
             }
             process.Dispose();
         }
-        _job?.Dispose();
-        _job = null;
+        Interlocked.Exchange(ref _job, null)?.Dispose();
         if (_log is not null)
             await _log.DisposeAsync();
         _log = null;

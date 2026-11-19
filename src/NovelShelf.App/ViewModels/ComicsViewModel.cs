@@ -26,6 +26,27 @@ public sealed partial class ComicCardViewModel : ViewModelBase
     private async Task LoadCoverAsync(CoverLoader covers) => Cover = await covers.LoadAsync(Summary.ThumbnailUrl);
 }
 
+public sealed partial class SourceCardViewModel : ViewModelBase
+{
+    public SourceCardViewModel(ComicSourceInfo source, CoverLoader covers)
+    {
+        Source = source;
+        _ = LoadIconAsync(covers);
+    }
+
+    public ComicSourceInfo Source { get; }
+    public string Name => Source.Name;
+    public string Initial => Source.Name.Length > 0 ? Source.Name[..1].ToUpperInvariant() : "?";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasIcon))]
+    private Bitmap? _icon;
+
+    public bool HasIcon => Icon is not null;
+
+    private async Task LoadIconAsync(CoverLoader covers) => Icon = await covers.LoadAsync(Source.IconUrl);
+}
+
 public sealed partial class ExtensionItemViewModel(SuwayomiExtension extension, Func<ExtensionItemViewModel, Task> act) : ViewModelBase
 {
     [ObservableProperty]
@@ -62,14 +83,23 @@ public sealed partial class ExtensionItemViewModel(SuwayomiExtension extension, 
     private Task ActAsync() => act(this);
 }
 
+public enum ComicsMode
+{
+    Sources,
+    Browse,
+    Manage,
+}
+
 public sealed partial class ComicsViewModel(AppServices services, Action<long> openInLibrary) : ViewModelBase
 {
     private const int MaxExtensionRows = 300;
     private readonly List<SuwayomiExtension> _extensions = [];
     private ComicListing _listing;
     private int _page;
+    private int _browseVersion;
+    private string _lastQuery = "";
 
-    public ObservableCollection<ComicSourceInfo> Sources { get; } = [];
+    public ObservableCollection<SourceCardViewModel> SourceCards { get; } = [];
     public ObservableCollection<ComicCardViewModel> Results { get; } = [];
     public ObservableCollection<ExtensionItemViewModel> Extensions { get; } = [];
 
@@ -91,19 +121,22 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
     private double _installPercent;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsReady), nameof(ShowBrowsePanel), nameof(ShowExtensionPanel))]
+    [NotifyPropertyChangedFor(nameof(IsReady), nameof(ShowSources), nameof(ShowBrowse), nameof(ShowManage))]
     private bool _isStarting;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsReady), nameof(ShowBrowsePanel), nameof(ShowExtensionPanel))]
+    [NotifyPropertyChangedFor(nameof(IsReady), nameof(ShowSources), nameof(ShowBrowse), nameof(ShowManage))]
     private bool _isRunning;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowSources), nameof(ShowBrowse), nameof(ShowManage), nameof(PageTitle))]
+    private ComicsMode _mode;
 
     [ObservableProperty]
     private string? _error;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanBrowseLatest))]
-    [NotifyCanExecuteChangedFor(nameof(SearchCommand), nameof(ExploreCommand), nameof(LatestCommand))]
+    [NotifyPropertyChangedFor(nameof(CanBrowseLatest), nameof(PageTitle))]
     private ComicSourceInfo? _selectedSource;
 
     [ObservableProperty]
@@ -111,7 +144,11 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
     private string _query = "";
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(SearchCommand), nameof(ExploreCommand), nameof(LatestCommand), nameof(LoadMoreCommand))]
+    [NotifyPropertyChangedFor(nameof(IsPopular), nameof(IsLatest), nameof(ListingLabel))]
+    private ComicListing _currentListing;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SearchCommand), nameof(PopularCommand), nameof(LatestCommand), nameof(LoadMoreCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -128,10 +165,6 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
     private ComicDetails? _details;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowBrowsePanel), nameof(ShowExtensionPanel))]
-    private bool _showExtensions;
-
-    [ObservableProperty]
     private string _extensionFilter = "";
 
     [ObservableProperty]
@@ -145,12 +178,29 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
 
     public bool NeedsInstall => !IsInstalled;
     public bool IsReady => IsRunning && !IsStarting;
-    public bool ShowBrowsePanel => IsReady && !ShowExtensions;
-    public bool ShowExtensionPanel => IsReady && ShowExtensions;
+    public bool ShowSources => IsReady && Mode == ComicsMode.Sources;
+    public bool ShowBrowse => IsReady && Mode == ComicsMode.Browse;
+    public bool ShowManage => IsReady && Mode == ComicsMode.Manage;
     public bool HasSelection => Selected is not null;
     public bool HasDetails => Details is not null;
-    public bool HasSources => Sources.Count > 0;
+    public bool HasSources => SourceCards.Count > 0;
     public bool CanBrowseLatest => SelectedSource?.SupportsLatest == true;
+    public bool IsPopular => CurrentListing == ComicListing.Popular;
+    public bool IsLatest => CurrentListing == ComicListing.Latest;
+
+    public string PageTitle => Mode switch
+    {
+        ComicsMode.Browse when SelectedSource is { } source => source.Name,
+        ComicsMode.Manage => "Gerenciar fontes",
+        _ => "Mangás, manhwas e HQs",
+    };
+
+    public string ListingLabel => CurrentListing switch
+    {
+        ComicListing.Latest => "Atualizados recentemente",
+        ComicListing.Search => $"Resultados para “{_lastQuery}”",
+        _ => "Populares",
+    };
 
     public async Task ActivateAsync()
     {
@@ -168,11 +218,8 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
             await services.Manga.EnsureStartedAsync();
             IsRunning = true;
             await LoadSourcesAsync();
-            if (Sources.Count == 0)
-            {
-                ShowExtensions = true;
-                await LoadExtensionsAsync(refresh: true);
-            }
+            if (SourceCards.Count == 0)
+                await ManageSourcesAsync();
         }
         catch (Exception e) when (e is InvalidOperationException or HttpRequestException or TaskCanceledException)
         {
@@ -228,13 +275,40 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
 
     private async Task LoadSourcesAsync()
     {
-        var keep = SelectedSource?.Id;
         var sources = await services.Manga.Client.GetSourcesAsync();
-        Sources.Clear();
+        SourceCards.Clear();
         foreach (var source in sources.Where(s => ShowAdult || !s.IsNsfw))
-            Sources.Add(source);
-        SelectedSource = Sources.FirstOrDefault(s => s.Id == keep) ?? Sources.FirstOrDefault();
+            SourceCards.Add(new SourceCardViewModel(source, services.Covers));
         OnPropertyChanged(nameof(HasSources));
+    }
+
+    [RelayCommand]
+    private Task OpenSourceAsync(SourceCardViewModel card)
+    {
+        SelectedSource = card.Source;
+        Query = "";
+        Mode = ComicsMode.Browse;
+        return BrowseAsync(ComicListing.Popular, 1);
+    }
+
+    [RelayCommand]
+    private void BackToSources()
+    {
+        _browseVersion++;
+        IsBusy = false;
+        Error = null;
+        Results.Clear();
+        Selected = null;
+        HasMore = false;
+        Mode = ComicsMode.Sources;
+    }
+
+    [RelayCommand]
+    private async Task ManageSourcesAsync()
+    {
+        Mode = ComicsMode.Manage;
+        if (_extensions.Count == 0)
+            await LoadExtensionsAsync(refresh: true);
     }
 
     private bool CanBrowse() => SelectedSource is not null && !IsBusy;
@@ -245,10 +319,18 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
     private Task SearchAsync() => BrowseAsync(ComicListing.Search, 1);
 
     [RelayCommand(CanExecute = nameof(CanBrowse))]
-    private Task ExploreAsync() => BrowseAsync(ComicListing.Popular, 1);
+    private Task PopularAsync()
+    {
+        Query = "";
+        return BrowseAsync(ComicListing.Popular, 1);
+    }
 
     [RelayCommand(CanExecute = nameof(CanBrowse))]
-    private Task LatestAsync() => BrowseAsync(ComicListing.Latest, 1);
+    private Task LatestAsync()
+    {
+        Query = "";
+        return BrowseAsync(ComicListing.Latest, 1);
+    }
 
     [RelayCommand(CanExecute = nameof(CanLoadMore))]
     private Task LoadMoreAsync() => BrowseAsync(_listing, _page + 1);
@@ -257,31 +339,41 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
     {
         if (SelectedSource is not { } source)
             return;
+        var version = ++_browseVersion;
         Error = null;
         IsBusy = true;
+        CurrentListing = listing;
+        _lastQuery = Query.Trim();
+        OnPropertyChanged(nameof(ListingLabel));
+        if (page == 1)
+        {
+            Results.Clear();
+            Selected = null;
+            HasMore = false;
+        }
         try
         {
             var result = await services.Manga.Client.BrowseAsync(source.Id, listing, Query.Trim(), page);
-            if (page == 1)
-            {
-                Results.Clear();
-                Selected = null;
-            }
-            foreach (var item in result.Items)
+            if (version != _browseVersion)
+                return;
+            var known = Results.Select(r => r.Summary.Key).ToHashSet();
+            foreach (var item in result.Items.Where(i => known.Add(i.Key)))
                 Results.Add(new ComicCardViewModel(item, services.Covers));
             _listing = listing;
             _page = page;
             HasMore = result.HasNextPage && result.Items.Count > 0;
             if (Results.Count == 0)
-                Error = "Nada encontrado nesta fonte.";
+                Error = listing == ComicListing.Search ? "Nada encontrado com esse nome nesta fonte." : "A fonte não devolveu nenhum título.";
         }
         catch (Exception e) when (e is InvalidOperationException or HttpRequestException or TaskCanceledException)
         {
-            Error = e.Message;
+            if (version == _browseVersion)
+                Error = e.Message;
         }
         finally
         {
-            IsBusy = false;
+            if (version == _browseVersion)
+                IsBusy = false;
         }
     }
 
@@ -325,14 +417,6 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
             }
         }
         openInLibrary(comic.Id);
-    }
-
-    [RelayCommand]
-    private async Task ToggleExtensionsAsync()
-    {
-        ShowExtensions = !ShowExtensions;
-        if (ShowExtensions && _extensions.Count == 0)
-            await LoadExtensionsAsync(refresh: true);
     }
 
     [RelayCommand]

@@ -2,17 +2,35 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:ui="using:FluentAvalonia.UI.Controls"
              xmlns:vm="using:NovelShelf.App.ViewModels"
-             xmlns:comics="using:NovelShelf.Core.Comics"
              x:Class="NovelShelf.App.Views.ComicsView"
              x:DataType="vm:ComicsViewModel">
     <Grid RowDefinitions="Auto,Auto,*" Margin="24,16">
-        <TextBlock Text="Mangás, manhwas e HQs" Theme="{StaticResource TitleTextBlockStyle}" Margin="0,0,0,12" />
+        <Grid ColumnDefinitions="Auto,*,Auto" Margin="0,0,0,12">
+            <Button Margin="0,0,12,0" VerticalAlignment="Center" Command="{Binding BackToSourcesCommand}"
+                    ToolTip.Tip="Voltar para as fontes">
+                <Button.IsVisible>
+                    <MultiBinding Converter="{x:Static BoolConverters.Or}">
+                        <Binding Path="ShowBrowse" />
+                        <Binding Path="ShowManage" />
+                    </MultiBinding>
+                </Button.IsVisible>
+                <ui:FASymbolIcon Symbol="Back" />
+            </Button>
+            <TextBlock Grid.Column="1" Text="{Binding PageTitle}" Theme="{StaticResource TitleTextBlockStyle}"
+                       VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            <Button Grid.Column="2" Command="{Binding ManageSourcesCommand}" IsVisible="{Binding ShowSources}">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <ui:FASymbolIcon Symbol="Manage" />
+                    <TextBlock Text="Gerenciar fontes" />
+                </StackPanel>
+            </Button>
+        </Grid>
 
         <StackPanel Grid.Row="1" Spacing="12">
             <ui:FAInfoBar Title="Algo deu errado" Message="{Binding Error}" Severity="Error" IsClosable="False"
                           IsOpen="{Binding Error, Converter={x:Static ObjectConverters.IsNotNull}}">
                 <ui:FAInfoBar.ActionButton>
-                    <Button Content="Tentar de novo" Command="{Binding RetryCommand}" IsVisible="{Binding IsInstalled}" />
+                    <Button Content="Tentar de novo" Command="{Binding RetryCommand}" IsVisible="{Binding !IsReady}" />
                 </ui:FAInfoBar.ActionButton>
             </ui:FAInfoBar>
 
@@ -48,51 +66,47 @@
                 <ui:FAProgressRing IsIndeterminate="True" Width="22" Height="22" />
                 <TextBlock Text="Iniciando o servidor de mangás..." VerticalAlignment="Center" />
             </StackPanel>
-
-            <Grid ColumnDefinitions="220,*,Auto" IsVisible="{Binding IsReady}">
-                <ComboBox ItemsSource="{Binding Sources}" SelectedItem="{Binding SelectedSource}"
-                          HorizontalAlignment="Stretch" PlaceholderText="Escolha a fonte">
-                    <ComboBox.ItemTemplate>
-                        <DataTemplate x:DataType="comics:ComicSourceInfo">
-                            <TextBlock Text="{Binding Name}" />
-                        </DataTemplate>
-                    </ComboBox.ItemTemplate>
-                </ComboBox>
-                <TextBox Grid.Column="1" Margin="8,0" Text="{Binding Query}" PlaceholderText="Nome da obra">
-                    <TextBox.KeyBindings>
-                        <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
-                    </TextBox.KeyBindings>
-                </TextBox>
-                <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
-                    <Button Classes="accent" Command="{Binding SearchCommand}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <ui:FASymbolIcon Symbol="Find" />
-                            <TextBlock Text="Buscar" />
-                        </StackPanel>
-                    </Button>
-                    <Button Command="{Binding ExploreCommand}" ToolTip.Tip="Obras populares da fonte">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <ui:FASymbolIcon Symbol="Globe" />
-                            <TextBlock Text="Explorar" />
-                        </StackPanel>
-                    </Button>
-                    <Button Command="{Binding LatestCommand}" IsVisible="{Binding CanBrowseLatest}" ToolTip.Tip="Atualizadas recentemente">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <ui:FASymbolIcon Symbol="Calendar" />
-                            <TextBlock Text="Novidades" />
-                        </StackPanel>
-                    </Button>
-                    <ToggleButton IsChecked="{Binding ShowExtensions}" Command="{Binding ToggleExtensionsCommand}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <ui:FASymbolIcon Symbol="Manage" />
-                            <TextBlock Text="Fontes" />
-                        </StackPanel>
-                    </ToggleButton>
-                </StackPanel>
-            </Grid>
         </StackPanel>
 
-        <Grid Grid.Row="2" Margin="0,16,0,0" RowDefinitions="Auto,*" IsVisible="{Binding ShowExtensionPanel}">
+        <Grid Grid.Row="2" RowDefinitions="Auto,*" IsVisible="{Binding ShowSources}">
+            <TextBlock Text="Escolha uma fonte para ver os títulos." Opacity="0.75" Margin="0,0,0,12" IsVisible="{Binding HasSources}" />
+            <TextBlock Text="Nenhuma fonte instalada. Clique em “Gerenciar fontes” e instale uma." Opacity="0.75"
+                       Margin="0,0,0,12" IsVisible="{Binding !HasSources}" />
+            <ScrollViewer Grid.Row="1">
+                <ItemsControl ItemsSource="{Binding SourceCards}">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <WrapPanel />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="vm:SourceCardViewModel">
+                            <Button Width="168" Height="156" Margin="0,0,12,12" Padding="12"
+                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                                    Command="{Binding $parent[ItemsControl].((vm:ComicsViewModel)DataContext).OpenSourceCommand}"
+                                    CommandParameter="{Binding}">
+                                <StackPanel Spacing="10" VerticalAlignment="Center">
+                                    <Panel Width="72" Height="72" HorizontalAlignment="Center">
+                                        <Border CornerRadius="12" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                                IsVisible="{Binding !HasIcon}">
+                                            <TextBlock Text="{Binding Initial}" FontSize="30" FontWeight="SemiBold"
+                                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                                        </Border>
+                                        <Border CornerRadius="12" ClipToBounds="True" IsVisible="{Binding HasIcon}">
+                                            <Image Source="{Binding Icon}" Stretch="UniformToFill" />
+                                        </Border>
+                                    </Panel>
+                                    <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextAlignment="Center"
+                                               TextWrapping="Wrap" MaxLines="2" />
+                                </StackPanel>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Grid>
+
+        <Grid Grid.Row="2" RowDefinitions="Auto,*" IsVisible="{Binding ShowManage}">
             <StackPanel Orientation="Horizontal" Spacing="12" Margin="0,0,0,8">
                 <TextBox Width="260" Text="{Binding ExtensionFilter}" PlaceholderText="Filtrar fontes" />
                 <CheckBox Content="Todas as línguas" IsChecked="{Binding AllLanguages}" />
@@ -121,14 +135,31 @@
             </ListBox>
         </Grid>
 
-        <Grid Grid.Row="2" Margin="0,16,0,0" ColumnDefinitions="*,380" IsVisible="{Binding ShowBrowsePanel}">
-            <Grid RowDefinitions="Auto,*,Auto">
-                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
-                    <ui:FAProgressRing IsIndeterminate="True" Width="20" Height="20" IsVisible="{Binding IsBusy}" />
-                    <TextBlock Text="Nenhuma fonte instalada. Clique em “Fontes” e instale uma." Opacity="0.75"
-                               IsVisible="{Binding !HasSources}" />
+        <Grid Grid.Row="2" ColumnDefinitions="*,380" IsVisible="{Binding ShowBrowse}">
+            <Grid RowDefinitions="Auto,Auto,*,Auto">
+                <Grid ColumnDefinitions="*,Auto,Auto,Auto" Margin="0,0,0,12">
+                    <TextBox Text="{Binding Query}" PlaceholderText="Buscar nesta fonte">
+                        <TextBox.KeyBindings>
+                            <KeyBinding Gesture="Enter" Command="{Binding SearchCommand}" />
+                        </TextBox.KeyBindings>
+                    </TextBox>
+                    <Button Grid.Column="1" Margin="8,0,0,0" Command="{Binding SearchCommand}">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <ui:FASymbolIcon Symbol="Find" />
+                            <TextBlock Text="Buscar" />
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Column="2" Margin="16,0,0,0" Content="Populares" Command="{Binding PopularCommand}"
+                            Classes.accent="{Binding IsPopular}" />
+                    <Button Grid.Column="3" Margin="8,0,0,0" Content="Novidades" Command="{Binding LatestCommand}"
+                            Classes.accent="{Binding IsLatest}" IsVisible="{Binding CanBrowseLatest}" />
+                </Grid>
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+                    <TextBlock Text="{Binding ListingLabel}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                    <TextBlock Text="{Binding Results.Count, StringFormat='· {0} títulos'}" Opacity="0.7" VerticalAlignment="Center" />
+                    <ui:FAProgressRing IsIndeterminate="True" Width="18" Height="18" IsVisible="{Binding IsBusy}" />
                 </StackPanel>
-                <ListBox Grid.Row="1" ItemsSource="{Binding Results}" SelectedItem="{Binding Selected}" Background="Transparent">
+                <ListBox Grid.Row="2" ItemsSource="{Binding Results}" SelectedItem="{Binding Selected}" Background="Transparent">
                     <ListBox.ItemsPanel>
                         <ItemsPanelTemplate>
                             <WrapPanel />
@@ -146,8 +177,13 @@
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
-                <Button Grid.Row="2" Content="Carregar mais" Command="{Binding LoadMoreCommand}" IsVisible="{Binding HasMore}"
-                        HorizontalAlignment="Center" Margin="0,8,0,0" />
+                <Button Grid.Row="3" HorizontalAlignment="Center" Margin="0,12,0,0" MinWidth="200"
+                        Command="{Binding LoadMoreCommand}" IsVisible="{Binding HasMore}">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <ui:FASymbolIcon Symbol="Download" />
+                        <TextBlock Text="Carregar mais" />
+                    </StackPanel>
+                </Button>
             </Grid>
 
             <Border Grid.Column="1" Margin="16,0,0,0" Padding="16" CornerRadius="8"
@@ -165,7 +201,6 @@
                                     <TextBlock Text="{Binding Details.ChapterCount, StringFormat='{}{0} capítulos'}" />
                                     <TextBlock Text="{Binding Details.Status}" Opacity="0.8" />
                                 </StackPanel>
-                                <TextBlock Text="{Binding Details.SourceName}" Opacity="0.6" FontSize="12" />
                                 <ItemsControl ItemsSource="{Binding Details.Genres}">
                                     <ItemsControl.ItemsPanel>
                                         <ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate>
