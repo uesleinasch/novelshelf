@@ -53,7 +53,9 @@ public sealed partial class LibraryItemViewModel : ViewModelBase
         ? "Ainda não enviado ao Kindle"
         : PendingForKindle > 0
             ? $"Kindle tem {Novel.SentChapterCount} capítulos — {PendingForKindle} novos para enviar"
-            : $"Kindle em dia ({Novel.SentChapterCount} capítulos)";
+            : Novel.NeedsResend
+                ? $"Kindle tem {Novel.SentChapterCount} capítulos — envie de novo para aplicar os ajustes"
+                : $"Kindle em dia ({Novel.SentChapterCount} capítulos)";
 
     public string ExportMenuHeader => IsComic ? "Converter para Kindle" : "Gerar livro";
 
@@ -61,7 +63,9 @@ public sealed partial class LibraryItemViewModel : ViewModelBase
         ? "Não enviado"
         : PendingForKindle > 0
             ? $"{PendingForKindle} novos para o Kindle"
-            : "Kindle em dia";
+            : Novel.NeedsResend
+                ? "Ajustes novos para o Kindle"
+                : "Kindle em dia";
 
     private async Task LoadCoverAsync(CoverLoader covers) => Cover = await covers.LoadAsync(Novel.CoverUrl, Novel.Id);
 }
@@ -315,7 +319,7 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
     private async Task<ExportedBook> ExportBookAsync(LibraryItemViewModel item)
     {
         if (!item.IsComic)
-            return await services.Exporter.ExportAsync(item.Novel.Id);
+            return await services.Exporter.ExportAsync(item.Novel.Id, services.Settings.BookStyle);
 
         var progress = new Progress<ComicExportProgress>(p =>
         {

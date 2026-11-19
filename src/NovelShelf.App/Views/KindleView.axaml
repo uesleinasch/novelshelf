@@ -38,6 +38,14 @@
                 <ComboBox ItemsSource="{Binding Profiles}" SelectedItem="{Binding Profile}" MinWidth="280" />
             </ui:FASettingsExpander.Footer>
         </ui:FASettingsExpander>
+        <ui:FASettingsExpander Header="Estilo dos livros" Description="Recuo, espaço entre parágrafos, alinhamento e título dos capítulos das novels.">
+            <ui:FASettingsExpander.IconSource>
+                <ui:FASymbolIconSource Symbol="Font" />
+            </ui:FASettingsExpander.IconSource>
+            <ui:FASettingsExpander.Footer>
+                <Button Content="Ajustar" Command="{Binding OpenBookStyleCommand}" />
+            </ui:FASettingsExpander.Footer>
+        </ui:FASettingsExpander>
         <ListBox ItemsSource="{Binding Devices}" SelectedItem="{Binding Selected}" Background="Transparent">
             <ListBox.ItemTemplate>
                 <DataTemplate x:DataType="dev:KindleDevice">
