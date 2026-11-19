@@ -18,7 +18,27 @@ public sealed record LibraryNovel(
     int SentChapterCount,
     DateTimeOffset AddedAt,
     DateTimeOffset UpdatedAt,
-    DateTimeOffset? SentAt);
+    DateTimeOffset? SentAt,
+    WorkKind Kind = WorkKind.Novel,
+    string? RemoteKey = null,
+    string? SourceName = null,
+    bool RightToLeft = false);
+
+public enum WorkKind
+{
+    Novel,
+    Comic,
+}
+
+public sealed record StoredComicChapter(
+    long NovelId,
+    string Key,
+    string Title,
+    double Number,
+    int Order,
+    int PageCount,
+    string Folder,
+    DateTimeOffset DownloadedAt);
 
 public sealed record StoredChapter(
     long NovelId,
