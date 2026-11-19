@@ -47,7 +47,12 @@ jobs:
           tar -czf "NovelShelf-$GITHUB_REF_NAME-linux-x64.tar.gz" "NovelShelf-$GITHUB_REF_NAME-linux-x64"
           zip -qr "NovelShelf-$GITHUB_REF_NAME-win-x64.zip" "NovelShelf-$GITHUB_REF_NAME-win-x64"
 
+      - name: Build AppImage
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq squashfs-tools
+          OUT_DIR="$PWD/out" ./scripts/build-appimage.sh
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "$GITHUB_REF_NAME" out/*.tar.gz out/*.zip --generate-notes --title "NovelShelf $GITHUB_REF_NAME"
+        run: gh release create "$GITHUB_REF_NAME" out/*.AppImage out/*.tar.gz out/*.zip --generate-notes --title "NovelShelf $GITHUB_REF_NAME"
