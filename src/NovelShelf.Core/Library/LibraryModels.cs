@@ -22,7 +22,8 @@ public sealed record LibraryNovel(
     WorkKind Kind = WorkKind.Novel,
     string? RemoteKey = null,
     string? SourceName = null,
-    bool RightToLeft = false);
+    bool RightToLeft = false,
+    bool NeedsResend = false);
 
 public enum WorkKind
 {
