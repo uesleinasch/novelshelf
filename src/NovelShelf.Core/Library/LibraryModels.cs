@@ -49,3 +49,5 @@ public sealed record StoredChapter(
     string Html,
     Uri? NextUrl,
     DateTimeOffset DownloadedAt);
+
+public sealed record QueuedDownload(long NovelId, int Requested, int Done, bool Paused);
