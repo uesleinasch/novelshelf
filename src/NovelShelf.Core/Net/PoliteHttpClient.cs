@@ -14,7 +14,7 @@ public sealed class PoliteHttpClient : IDisposable
     {
         _http = handler is null ? new HttpClient() : new HttpClient(handler);
         _http.Timeout = TimeSpan.FromSeconds(30);
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd("Mozilla/5.0 (X11; Linux x86_64) NovelShelf/0.1");
+        _http.DefaultRequestHeaders.UserAgent.ParseAdd($"Mozilla/5.0 (X11; Linux x86_64) NovelShelf/{typeof(PoliteHttpClient).Assembly.GetName().Version?.ToString(2) ?? "0"}");
         _http.DefaultRequestHeaders.AcceptLanguage.ParseAdd("pt-BR,pt;q=0.9");
         _minInterval = minInterval;
         _time = time ?? TimeProvider.System;
