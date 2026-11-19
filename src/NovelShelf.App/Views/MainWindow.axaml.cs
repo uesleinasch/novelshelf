@@ -30,6 +30,7 @@ public partial class MainWindow : Window
         vm.Current = item.Tag switch
         {
             "search" => vm.Search,
+            "comics" => vm.Comics,
             "kindle" => vm.Kindle,
             _ => vm.Library,
         };
@@ -46,6 +47,7 @@ public partial class MainWindow : Window
         var tag = vm.Current switch
         {
             SearchViewModel => "search",
+            ComicsViewModel => "comics",
             KindleViewModel => "kindle",
             _ => "library",
         };

@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\NovelShelf.Ebook\NovelShelf.Ebook.csproj" />
+    <ProjectReference Include="..\..\src\NovelShelf.Comics\NovelShelf.Comics.csproj" />
   </ItemGroup>
 
 </Project>

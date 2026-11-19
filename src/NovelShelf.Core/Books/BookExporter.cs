@@ -8,7 +8,7 @@ using NovelShelf.Ebook.Mobi;
 namespace NovelShelf.Core.Books;
 
 public sealed record ExportedBook(
-    string EpubPath,
+    string? EpubPath,
     string Azw3Path,
     string KindleFileName,
     string ThumbnailFileName,
@@ -75,7 +75,8 @@ public sealed class BookExporter(LibraryStore store, AppPaths paths, PoliteHttpC
         return hash;
     }
 
-    public static string FileNameFor(LibraryNovel novel) => $"{novel.SourceId}-{novel.Slug}";
+    public static string FileNameFor(LibraryNovel novel) =>
+        novel.Kind == WorkKind.Comic ? $"hq-{novel.Slug}" : $"{novel.SourceId}-{novel.Slug}";
 
     private async Task<byte[]?> GetCoverAsync(LibraryNovel novel, CancellationToken ct)
     {

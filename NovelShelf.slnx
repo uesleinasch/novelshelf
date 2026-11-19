@@ -1,10 +1,12 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/NovelShelf.App/NovelShelf.App.csproj" />
+    <Project Path="src/NovelShelf.Comics/NovelShelf.Comics.csproj" />
     <Project Path="src/NovelShelf.Core/NovelShelf.Core.csproj" />
     <Project Path="src/NovelShelf.Devices/NovelShelf.Devices.csproj" />
     <Project Path="src/NovelShelf.Ebook/NovelShelf.Ebook.csproj" />
     <Project Path="src/NovelShelf.Sources.NovelMania/NovelShelf.Sources.NovelMania.csproj" />
+    <Project Path="src/NovelShelf.Suwayomi/NovelShelf.Suwayomi.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/NovelShelf.Ebook.Tests/NovelShelf.Ebook.Tests.csproj" />

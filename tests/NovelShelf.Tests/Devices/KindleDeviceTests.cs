@@ -68,16 +68,54 @@ public sealed class KindleDeviceTests : IDisposable
         Assert.Equal(["remove " + target, "copy /tmp/b.azw3 " + target], runner.Calls);
     }
 
+    [Fact]
+    public async Task Eject_mass_storage_uses_gio_eject_on_the_mount_point()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "No Windows o ejetar passa pelo Explorer.");
+        var runner = new RecordingRunner();
+
+        await new KindleEjector(runner).EjectAsync(
+            new KindleDevice("Kindle", "/media/user/Kindle", KindleConnection.MassStorage), TestContext.Current.CancellationToken);
+
+        Assert.Equal(["gio mount -e /media/user/Kindle"], runner.Calls);
+    }
+
+    [Fact]
+    public async Task Eject_mtp_unmounts_the_whole_device()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "MTP pelo gvfs só existe no Linux.");
+        var runner = new RecordingRunner();
+        var storage = "/run/user/1000/gvfs/mtp:host=Amazon_Kindle_G000XX/Internal Storage";
+
+        await new KindleEjector(runner).EjectAsync(
+            new KindleDevice("Amazon Kindle", storage, KindleConnection.Mtp), TestContext.Current.CancellationToken);
+
+        Assert.Equal(["gio mount -u mtp://Amazon_Kindle_G000XX/"], runner.Calls);
+    }
+
+    [Fact]
+    public async Task Eject_failure_explains_what_to_do()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Fluxo gio só existe no Linux.");
+        var runner = new RecordingRunner(exitCode: 1, output: "gio: Device busy");
+
+        var error = await Assert.ThrowsAsync<InvalidOperationException>(() => new KindleEjector(runner).EjectAsync(
+            new KindleDevice("Kindle", "/media/user/Kindle", KindleConnection.MassStorage), TestContext.Current.CancellationToken));
+
+        Assert.Contains("Device busy", error.Message);
+        Assert.Contains("tente de novo", error.Message);
+    }
+
     public void Dispose() => Directory.Delete(_root, recursive: true);
 
-    private sealed class RecordingRunner : IProcessRunner
+    private sealed class RecordingRunner(int exitCode = 0, string output = "") : IProcessRunner
     {
         public List<string> Calls { get; } = [];
 
         public Task<(int ExitCode, string Output)> RunAsync(string file, IReadOnlyList<string> args, CancellationToken ct = default)
         {
-            Calls.Add(string.Join(' ', args));
-            return Task.FromResult((0, ""));
+            Calls.Add(file == "gio" && args.FirstOrDefault() == "mount" ? $"gio {string.Join(' ', args)}" : string.Join(' ', args));
+            return Task.FromResult((exitCode, output));
         }
     }
 }

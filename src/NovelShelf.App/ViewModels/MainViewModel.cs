@@ -5,11 +5,15 @@ namespace NovelShelf.App.ViewModels;
 
 public sealed partial class MainViewModel : ViewModelBase
 {
+    private readonly AppServices _services;
+
     public MainViewModel(AppServices services)
     {
+        _services = services;
         Kindle = new KindleViewModel(services);
-        Library = new LibraryViewModel(services, Kindle);
+        Library = new LibraryViewModel(services, Kindle, OpenLayout);
         Search = new SearchViewModel(services, OpenInLibrary);
+        Comics = new ComicsViewModel(services, OpenInLibrary);
         Library.Reload();
         _current = Library.HasNovels ? Library : Search;
         _ = Kindle.DetectAsync();
@@ -18,9 +22,27 @@ public sealed partial class MainViewModel : ViewModelBase
     public SearchViewModel Search { get; }
     public LibraryViewModel Library { get; }
     public KindleViewModel Kindle { get; }
+    public ComicsViewModel Comics { get; }
 
     [ObservableProperty]
     private ViewModelBase _current;
+
+    partial void OnCurrentChanged(ViewModelBase value)
+    {
+        if (value is ComicsViewModel comics)
+            _ = comics.ActivateAsync();
+    }
+
+    private void OpenLayout(long novelId)
+    {
+        if (_services.Library.GetNovel(novelId) is not { } comic)
+            return;
+        Current = new ComicLayoutViewModel(_services, comic, () =>
+        {
+            Library.Reload(novelId);
+            Current = Library;
+        });
+    }
 
     private void OpenInLibrary(long novelId)
     {
