@@ -37,11 +37,22 @@ public sealed partial class LibraryItemViewModel : ViewModelBase
     partial void OnRightToLeftChanged(bool value) => _store.SetRightToLeft(Novel.Id, value);
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Progress), nameof(KindleStatus), nameof(KindleBadge), nameof(PendingForKindle))]
+    [NotifyPropertyChangedFor(nameof(Progress), nameof(KindleStatus), nameof(KindleBadge), nameof(PendingForKindle), nameof(VolumeSize), nameof(VolumeSummary))]
     private LibraryNovel _novel;
 
     [ObservableProperty]
     private Bitmap? _cover;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(QueueText), nameof(InQueue), nameof(CanPauseDownload), nameof(CanResumeDownload), nameof(QueueMaximum), nameof(QueueValue))]
+    private DownloadJob? _job;
+
+    public bool InQueue => Job is { IsPending: true } or { State: DownloadState.Failed };
+    public string? QueueText => InQueue ? DownloadText.Describe(Job!) : null;
+    public bool CanPauseDownload => Job?.State is DownloadState.Queued or DownloadState.Running;
+    public bool CanResumeDownload => Job?.State is DownloadState.Paused or DownloadState.Failed;
+    public double QueueMaximum => Math.Max(1, Job?.Requested ?? 1);
+    public double QueueValue => Job?.Done ?? 0;
 
     public string Progress => Novel.RemoteChapterCount is { } total
         ? $"{Novel.DownloadedChapters} de {total} capítulos baixados"
@@ -53,9 +64,25 @@ public sealed partial class LibraryItemViewModel : ViewModelBase
         ? "Ainda não enviado ao Kindle"
         : PendingForKindle > 0
             ? $"Kindle tem {Novel.SentChapterCount} capítulos — {PendingForKindle} novos para enviar"
-            : Novel.NeedsResend
+            : (Novel.NeedsResend || Novel.VolumeLayoutChanged)
                 ? $"Kindle tem {Novel.SentChapterCount} capítulos — envie de novo para aplicar os ajustes"
                 : $"Kindle em dia ({Novel.SentChapterCount} capítulos)";
+
+    public double VolumeSize
+    {
+        get => Novel.VolumeSize;
+        set
+        {
+            var size = double.IsNaN(value) ? 0 : (int)Math.Clamp(value, 0, 5000);
+            if (size == Novel.VolumeSize)
+                return;
+            _store.SetVolumeSize(Novel.Id, size);
+            Novel = _store.GetNovel(Novel.Id) ?? Novel;
+        }
+    }
+
+    public string VolumeSummary => Volumes.Describe(Novel.DownloadedChapters, Novel.VolumeSize)
+        + (Novel.VolumeLayoutChanged ? " No próximo envio os arquivos antigos desta obra saem do Kindle." : "");
 
     public string ExportMenuHeader => IsComic ? "Converter para Kindle" : "Gerar livro";
 
@@ -63,7 +90,7 @@ public sealed partial class LibraryItemViewModel : ViewModelBase
         ? "Não enviado"
         : PendingForKindle > 0
             ? $"{PendingForKindle} novos para o Kindle"
-            : Novel.NeedsResend
+            : (Novel.NeedsResend || Novel.VolumeLayoutChanged)
                 ? "Ajustes novos para o Kindle"
                 : "Kindle em dia";
 
@@ -168,7 +195,7 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DownloadCommand), nameof(SendToKindleCommand), nameof(ExportCommand), nameof(RemoveCommand), nameof(EjectKindleCommand), nameof(AdjustLayoutCommand))]
-    [NotifyCanExecuteChangedFor(nameof(DownloadItemCommand), nameof(SendItemToKindleCommand), nameof(ExportItemCommand), nameof(RemoveItemCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SendItemToKindleCommand), nameof(ExportItemCommand), nameof(RemoveItemCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -208,7 +235,10 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
     {
         var keep = select ?? Selected?.Novel.Id;
         _all = services.Library.GetNovels()
-            .Select(novel => new LibraryItemViewModel(novel, services.Covers, services.Library, this))
+            .Select(novel => new LibraryItemViewModel(novel, services.Covers, services.Library, this)
+            {
+                Job = services.Downloads.Queue.Find(novel.Id),
+            })
             .ToList();
         RebuildSites();
         if (select is not null && _all.FirstOrDefault(n => n.Novel.Id == select) is { } wanted
@@ -250,39 +280,35 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
 
     private bool CanAct() => Selected is not null && !IsBusy;
 
-    [RelayCommand(CanExecute = nameof(CanAct), IncludeCancelCommand = true)]
-    private async Task DownloadAsync(CancellationToken ct)
+    private bool HasSelectionToDownload() => Selected is not null;
+
+    [RelayCommand(CanExecute = nameof(HasSelectionToDownload))]
+    private void Download() => Enqueue(Selected!);
+
+    private void Enqueue(LibraryItemViewModel item)
     {
-        var item = Selected!;
-        var count = Math.Max(1, (int)ChaptersToDownload);
-        await RunAsync("Baixando capítulos", async () =>
+        services.Downloads.Enqueue(item.Novel, (int)ChaptersToDownload);
+        item.Job = services.Downloads.Queue.Find(item.Novel.Id);
+    }
+
+    [RelayCommand]
+    private void PauseDownload(LibraryItemViewModel item) => services.Downloads.Queue.Pause(item.Novel.Id);
+
+    [RelayCommand]
+    private void ResumeDownload(LibraryItemViewModel item) => services.Downloads.Queue.Resume(item.Novel.Id);
+
+    [RelayCommand]
+    private void CancelDownload(LibraryItemViewModel item) => services.Downloads.Queue.Remove(item.Novel.Id);
+
+    public void OnDownloadsUpdated()
+    {
+        foreach (var item in _all)
         {
-            ProgressMaximum = count;
-            ProgressValue = 0;
-            var progress = new Progress<DownloadProgress>(p =>
-            {
-                ProgressValue = p.Done;
-                StatusMessage = $"{p.Done}/{p.Requested} — {p.ChapterTitle}";
-            });
-            DownloadResult result;
-            if (item.IsComic)
-            {
-                StatusMessage = "Conectando à fonte...";
-                await services.Manga.EnsureStartedAsync();
-                services.Library.UpsertComic(await services.Manga.Client.GetComicAsync(item.Novel.SourceId, item.Novel.RemoteKey!, ct));
-                result = await services.ComicDownloader.DownloadNextAsync(item.Novel.Id, count, progress, ct);
-            }
-            else
-            {
-                var novel = await services.Sources.Get(item.Novel.SourceId).GetNovelAsync(item.Novel.Url, ct);
-                services.Library.Upsert(novel);
-                result = await services.Downloader.DownloadNextAsync(item.Novel.Id, count, progress, ct);
-            }
-            Refresh(item);
-            Success("Download concluído", result.ReachedEnd
-                ? $"{result.Downloaded} capítulos baixados. Você chegou ao último capítulo publicado."
-                : $"{result.Downloaded} capítulos baixados.");
-        });
+            var job = services.Downloads.Queue.Find(item.Novel.Id);
+            if (job is not null && (job.Done != item.Job?.Done || job.State != item.Job?.State))
+                Refresh(item);
+            item.Job = job;
+        }
     }
 
     [RelayCommand(CanExecute = nameof(CanAct))]
@@ -291,10 +317,11 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
         var item = Selected!;
         await RunAsync(item.IsComic ? "Convertendo para o Kindle" : "Gerando livro", async () =>
         {
-            var book = await ExportBookAsync(item);
-            Success(item.IsComic ? "Convertido" : "Livro gerado", book.EpubPath is null
-                ? $"AZW3 com {book.ChapterCount} capítulos em {services.Paths.Books}"
-                : $"EPUB e AZW3 com {book.ChapterCount} capítulos em {services.Paths.Books}");
+            var export = await services.Delivery.ExportAsync(item.Novel, ComicProgress(item));
+            var formats = export.Books[0].EpubPath is null ? "AZW3" : "EPUB e AZW3";
+            Success(item.IsComic ? "Convertido" : "Livro gerado", export.Books.Count == 1
+                ? $"{formats} com {export.TotalChapters} capítulos em {services.Paths.Books}"
+                : $"{export.Books.Count} volumes ({formats}) com {export.TotalChapters} capítulos em {services.Paths.Books}");
         });
     }
 
@@ -306,34 +333,30 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
         {
             var device = await kindle.EnsureDeviceAsync()
                 ?? throw new InvalidOperationException("Nenhum Kindle encontrado. Conecte o cabo USB e desbloqueie a tela do Kindle.");
-            var book = await ExportBookAsync(item);
-            StatusMessage = $"Copiando para {device.Name}...";
-            var result = await services.Sender.SendAsync(device,
-                new SendRequest(book.Azw3Path, book.KindleFileName, book.CoverJpeg, book.ThumbnailFileName));
-            services.Library.MarkSent(item.Novel.Id, book.ChapterCount);
+            var status = new Progress<string>(m => StatusMessage = m);
+            var result = await services.Delivery.SendAsync(device, item.Novel, ComicProgress(item), status);
             Refresh(item);
-            Success("Enviado", $"{book.ChapterCount} capítulos em {device.Name}: {result.TargetPath}. Ejete o Kindle para ele atualizar a biblioteca.");
+            var what = result.Volumes == 1 ? "1 livro" : $"{result.Volumes} volumes";
+            var removed = result.Removed.Count == 0 ? "" : $" Arquivos antigos removidos: {string.Join(", ", result.Removed)}.";
+            Success("Enviado", $"{what} ({result.ChapterCount} capítulos) em {device.Name}: {result.TargetFolder}.{removed} Ejete o Kindle para ele atualizar a biblioteca.");
         });
     }
 
-    private async Task<ExportedBook> ExportBookAsync(LibraryItemViewModel item)
+    private Progress<ComicExportProgress>? ComicProgress(LibraryItemViewModel item) => !item.IsComic ? null : new(p =>
     {
-        if (!item.IsComic)
-            return await services.Exporter.ExportAsync(item.Novel.Id, services.Settings.BookStyle);
-
-        var progress = new Progress<ComicExportProgress>(p =>
-        {
-            ProgressMaximum = Math.Max(1, p.Total);
-            ProgressValue = p.Done;
-            StatusMessage = p.Done < p.Total ? $"Ajustando páginas: {p.Done + 1}/{p.Total} — {p.ChapterTitle}" : "Montando o AZW3...";
-        });
-        return await services.ComicExporter.ExportAsync(item.Novel.Id, services.KindleProfile, progress);
-    }
+        ProgressMaximum = Math.Max(1, p.Total);
+        ProgressValue = p.Done;
+        StatusMessage = p.Done < p.Total ? $"Ajustando páginas: {p.Done + 1}/{p.Total} — {p.ChapterTitle}" : "Montando o AZW3...";
+    });
 
     private bool CanEject() => !IsBusy;
 
-    [RelayCommand(CanExecute = nameof(CanEject))]
-    private Task DownloadItemAsync(LibraryItemViewModel item) => RunOnAsync(item, DownloadCommand);
+    [RelayCommand]
+    private void DownloadItem(LibraryItemViewModel item)
+    {
+        Selected = item;
+        Enqueue(item);
+    }
 
     [RelayCommand(CanExecute = nameof(CanEject))]
     private Task SendItemToKindleAsync(LibraryItemViewModel item) => RunOnAsync(item, SendToKindleCommand);
@@ -380,6 +403,7 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
     private void Remove()
     {
         var item = Selected!;
+        services.Downloads.Queue.Remove(item.Novel.Id);
         services.Library.DeleteNovel(item.Novel.Id);
         if (item.IsComic && Directory.Exists(services.ComicDownloader.ChapterRoot(item.Novel.Id)))
             Directory.Delete(services.ComicDownloader.ChapterRoot(item.Novel.Id), recursive: true);
@@ -417,6 +441,37 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
         {
             IsBusy = false;
         }
+    }
+
+    [ObservableProperty]
+    private string? _syncTitle;
+
+    [ObservableProperty]
+    private string? _syncText;
+
+    [ObservableProperty]
+    private FluentAvalonia.UI.Controls.FAInfoBarSeverity _syncSeverity;
+
+    [ObservableProperty]
+    private bool _isSyncOpen;
+
+    [RelayCommand]
+    private void CheckForNewChapters()
+    {
+        var count = services.AutoSync.StartRound();
+        ShowSyncMessage(new SyncMessage("Capítulos novos", count == 0
+            ? "Nenhuma obra para atualizar. Só entram as obras já baixadas até o último capítulo."
+            : $"Procurando capítulos novos em {count} obras. Acompanhe na página Downloads."));
+    }
+
+    public void ShowSyncMessage(SyncMessage message)
+    {
+        SyncSeverity = message.IsError
+            ? FluentAvalonia.UI.Controls.FAInfoBarSeverity.Error
+            : FluentAvalonia.UI.Controls.FAInfoBarSeverity.Informational;
+        SyncTitle = message.Title;
+        SyncText = message.Text;
+        IsSyncOpen = true;
     }
 
     private void Success(string title, string message)

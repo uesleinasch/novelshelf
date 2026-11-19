@@ -5,9 +5,16 @@
              x:Class="NovelShelf.App.Views.LibraryView"
              x:DataType="vm:LibraryViewModel">
     <Grid x:Name="Root" ColumnDefinitions="320,*" RowDefinitions="Auto,*" Margin="24,16">
-        <Grid Grid.ColumnSpan="2" ColumnDefinitions="*,Auto" Margin="0,0,0,12">
+        <Grid Grid.ColumnSpan="2" ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" Margin="0,0,0,12">
             <TextBlock Text="Biblioteca" Theme="{StaticResource TitleTextBlockStyle}" />
             <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                <Button Command="{Binding CheckForNewChaptersCommand}" Margin="0,0,8,0" IsVisible="{Binding HasNovels}"
+                        ToolTip.Tip="Baixa capítulos novos das obras que você já baixou até o fim">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <ui:FASymbolIcon Symbol="Sync" />
+                        <TextBlock Text="Buscar capítulos novos" />
+                    </StackPanel>
+                </Button>
                 <Button Command="{Binding ShowListCommand}" Classes.accent="{Binding !IsGridView}" ToolTip.Tip="Ver em lista">
                     <ui:FASymbolIcon Symbol="List" />
                 </Button>
@@ -15,6 +22,8 @@
                     <ui:FASymbolIcon Symbol="ViewAll" />
                 </Button>
             </StackPanel>
+            <ui:FAInfoBar Grid.Row="1" Grid.ColumnSpan="2" Margin="0,12,0,0" Title="{Binding SyncTitle}" Message="{Binding SyncText}"
+                          Severity="{Binding SyncSeverity}" IsOpen="{Binding IsSyncOpen, Mode=TwoWay}" IsClosable="True" />
         </Grid>
 
         <Grid Grid.Row="1" RowDefinitions="Auto,*">
@@ -66,6 +75,8 @@
                                 <TextBlock Text="{Binding Novel.Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
                                 <TextBlock Text="{Binding Progress}" FontSize="12" Opacity="0.75" />
                                 <TextBlock Text="{Binding KindleStatus}" FontSize="12" Opacity="0.6" TextTrimming="CharacterEllipsis" />
+                                <TextBlock Text="{Binding QueueText}" FontSize="12" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                           TextTrimming="CharacterEllipsis" IsVisible="{Binding InQueue}" />
                             </StackPanel>
                         </Grid>
                     </DataTemplate>
@@ -103,6 +114,8 @@
                             </Border>
                             <TextBlock Text="{Binding Novel.Title}" TextWrapping="Wrap" MaxLines="2" FontWeight="SemiBold" ToolTip.Tip="{Binding Novel.Title}" />
                             <TextBlock Text="{Binding KindleBadge}" FontSize="12" Opacity="0.7" TextTrimming="CharacterEllipsis" ToolTip.Tip="{Binding KindleStatus}" />
+                            <ProgressBar Minimum="0" Maximum="{Binding QueueMaximum}" Value="{Binding QueueValue}" IsVisible="{Binding InQueue}"
+                                         ToolTip.Tip="{Binding QueueText}" />
                         </StackPanel>
                     </DataTemplate>
                 </ListBox.ItemTemplate>
@@ -138,10 +151,30 @@
                                 <ui:FANumberBox Value="{Binding ChaptersToDownload}" Minimum="1" Maximum="5000"
                                                 SpinButtonPlacementMode="Compact" Width="130" />
                                 <Button Classes="accent" Content="Baixar" Command="{Binding DownloadCommand}" />
-                                <Button Content="Cancelar" Command="{Binding DownloadCancelCommand}" IsVisible="{Binding IsBusy}" />
                             </StackPanel>
                         </ui:FASettingsExpander.Footer>
                     </ui:FASettingsExpander>
+
+                    <Grid ColumnDefinitions="*,Auto" IsVisible="{Binding Selected.InQueue, FallbackValue=False}">
+                        <StackPanel Spacing="4" VerticalAlignment="Center">
+                            <ProgressBar Minimum="0" Maximum="{Binding Selected.QueueMaximum}" Value="{Binding Selected.QueueValue}" />
+                            <TextBlock Text="{Binding Selected.QueueText}" FontSize="12" Opacity="0.8" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4" Margin="12,0,0,0" VerticalAlignment="Center">
+                            <Button Command="{Binding PauseDownloadCommand}" CommandParameter="{Binding Selected}"
+                                    IsVisible="{Binding Selected.CanPauseDownload, FallbackValue=False}" ToolTip.Tip="Pausar download">
+                                <ui:FASymbolIcon Symbol="Pause" />
+                            </Button>
+                            <Button Command="{Binding ResumeDownloadCommand}" CommandParameter="{Binding Selected}"
+                                    IsVisible="{Binding Selected.CanResumeDownload, FallbackValue=False}" ToolTip.Tip="Retomar download">
+                                <ui:FASymbolIcon Symbol="Play" />
+                            </Button>
+                            <Button Command="{Binding CancelDownloadCommand}" CommandParameter="{Binding Selected}"
+                                    ToolTip.Tip="Tirar da fila (os capítulos já baixados ficam)">
+                                <ui:FASymbolIcon Symbol="Dismiss" />
+                            </Button>
+                        </StackPanel>
+                    </Grid>
 
                     <ui:FASettingsExpander Header="Enviar para o Kindle" Description="{Binding Kindle.Summary}">
                         <ui:FASettingsExpander.IconSource>
@@ -153,6 +186,20 @@
                                 <Button Classes="accent" Content="Enviar" Command="{Binding SendToKindleCommand}" />
                                 <Button Content="Ejetar" Command="{Binding EjectKindleCommand}"
                                         ToolTip.Tip="Libera o Kindle para desconectar e atualizar a biblioteca" />
+                            </StackPanel>
+                        </ui:FASettingsExpander.Footer>
+                    </ui:FASettingsExpander>
+
+                    <ui:FASettingsExpander Header="Dividir em volumes" Description="{Binding Selected.VolumeSummary}">
+                        <ui:FASettingsExpander.IconSource>
+                            <ui:FASymbolIconSource Symbol="Library" />
+                        </ui:FASettingsExpander.IconSource>
+                        <ui:FASettingsExpander.Footer>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <ui:FANumberBox Value="{Binding Selected.VolumeSize}" Minimum="0" Maximum="5000" SmallChange="50" LargeChange="100"
+                                                SpinButtonPlacementMode="Compact" Width="130"
+                                                ToolTip.Tip="Capítulos por volume. 0 = um livro só." />
+                                <TextBlock Text="capítulos por volume" VerticalAlignment="Center" Opacity="0.8" />
                             </StackPanel>
                         </ui:FASettingsExpander.Footer>
                     </ui:FASettingsExpander>

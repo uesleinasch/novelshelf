@@ -112,6 +112,44 @@ public sealed class LibraryStore
                 COMMIT;
                 """);
         }
+
+        if (ScalarLong(db, "PRAGMA user_version") < 4)
+        {
+            Execute(db, """
+                BEGIN;
+                CREATE TABLE download_queue (
+                    novel_id INTEGER PRIMARY KEY REFERENCES novels(id) ON DELETE CASCADE,
+                    position INTEGER NOT NULL,
+                    requested INTEGER NOT NULL,
+                    done INTEGER NOT NULL,
+                    paused INTEGER NOT NULL
+                );
+                PRAGMA user_version = 4;
+                COMMIT;
+                """);
+        }
+
+        if (ScalarLong(db, "PRAGMA user_version") < 5)
+        {
+            Execute(db, """
+                BEGIN;
+                ALTER TABLE novels ADD COLUMN caught_up INTEGER NOT NULL DEFAULT 0;
+                PRAGMA user_version = 5;
+                COMMIT;
+                """);
+        }
+
+        if (ScalarLong(db, "PRAGMA user_version") < 6)
+        {
+            Execute(db, """
+                BEGIN;
+                ALTER TABLE novels ADD COLUMN volume_size INTEGER NOT NULL DEFAULT 0;
+                ALTER TABLE novels ADD COLUMN sent_volume_size INTEGER;
+                UPDATE novels SET sent_volume_size = 0 WHERE sent_at IS NOT NULL;
+                PRAGMA user_version = 6;
+                COMMIT;
+                """);
+        }
     }
 
     public ComicLayout GetComicLayout(long novelId)
@@ -360,10 +398,48 @@ public sealed class LibraryStore
         return QueryChapters(db, "WHERE novel_id = $novel ORDER BY idx", ("$novel", novelId));
     }
 
+    public void SaveDownloadQueue(IReadOnlyList<QueuedDownload> queue)
+    {
+        using var db = Open();
+        Execute(db, "BEGIN; DELETE FROM download_queue;");
+        for (var i = 0; i < queue.Count; i++)
+        {
+            var q = queue[i];
+            Execute(db, """
+                INSERT INTO download_queue (novel_id, position, requested, done, paused)
+                SELECT $novel, $pos, $requested, $done, $paused WHERE EXISTS (SELECT 1 FROM novels WHERE id = $novel)
+                """, ("$novel", q.NovelId), ("$pos", i), ("$requested", q.Requested), ("$done", q.Done), ("$paused", q.Paused ? 1 : 0));
+        }
+        Execute(db, "COMMIT");
+    }
+
+    public IReadOnlyList<QueuedDownload> LoadDownloadQueue()
+    {
+        using var db = Open();
+        using var cmd = Command(db, "SELECT novel_id, requested, done, paused FROM download_queue ORDER BY position", []);
+        using var r = cmd.ExecuteReader();
+        var list = new List<QueuedDownload>();
+        while (r.Read())
+            list.Add(new QueuedDownload(r.GetInt64(0), r.GetInt32(1), r.GetInt32(2), r.GetInt64(3) != 0));
+        return list;
+    }
+
+    public void SetVolumeSize(long novelId, int volumeSize)
+    {
+        using var db = Open();
+        Execute(db, "UPDATE novels SET volume_size = $size WHERE id = $id", ("$size", Math.Max(0, volumeSize)), ("$id", novelId));
+    }
+
+    public void SetCaughtUp(long novelId, bool caughtUp)
+    {
+        using var db = Open();
+        Execute(db, "UPDATE novels SET caught_up = $value WHERE id = $id", ("$value", caughtUp ? 1 : 0), ("$id", novelId));
+    }
+
     public void MarkSent(long novelId, int chapterCount)
     {
         using var db = Open();
-        Execute(db, "UPDATE novels SET sent_chapter_count = $count, sent_at = $now, needs_resend = 0 WHERE id = $novel",
+        Execute(db, "UPDATE novels SET sent_chapter_count = $count, sent_at = $now, needs_resend = 0, sent_volume_size = volume_size WHERE id = $novel",
             ("$count", chapterCount), ("$now", Stamp(_time.GetUtcNow())), ("$novel", novelId));
     }
 
@@ -375,7 +451,8 @@ public sealed class LibraryStore
                    (SELECT COUNT(*) FROM chapters c WHERE c.novel_id = n.id)
                      + (SELECT COUNT(*) FROM comic_chapters cc WHERE cc.novel_id = n.id),
                    n.sent_chapter_count, n.added_at, n.updated_at, n.sent_at,
-                   n.kind, n.remote_key, n.source_name, n.right_to_left, n.needs_resend
+                   n.kind, n.remote_key, n.source_name, n.right_to_left, n.needs_resend, n.caught_up,
+                   n.volume_size, n.sent_volume_size
             FROM novels n
             {tail}
             """, args);
@@ -406,7 +483,10 @@ public sealed class LibraryStore
                 RemoteKey: NullableString(r, 19),
                 SourceName: NullableString(r, 20),
                 RightToLeft: r.GetInt64(21) != 0,
-                NeedsResend: r.GetInt64(22) != 0));
+                NeedsResend: r.GetInt64(22) != 0,
+                CaughtUp: r.GetInt64(23) != 0,
+                VolumeSize: r.GetInt32(24),
+                SentVolumeSize: r.IsDBNull(25) ? null : r.GetInt32(25)));
         }
         return list;
     }

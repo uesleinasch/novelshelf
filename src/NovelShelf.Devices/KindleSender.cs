@@ -43,6 +43,23 @@ public sealed class KindleSender(IProcessRunner? runner = null)
         return new SendResult(target, thumbnailWritten);
     }
 
+    public async Task<IReadOnlyList<string>> RemoveAsync(KindleDevice device, Func<string, bool> shouldRemove, CancellationToken ct = default)
+    {
+        var targetDir = Path.Combine(device.DocumentsPath, Folder);
+        if (!Directory.Exists(targetDir))
+            return [];
+        var removed = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(targetDir).Where(f => shouldRemove(Path.GetFileName(f))).ToList())
+        {
+            if (device.Connection == KindleConnection.Mtp && OperatingSystem.IsLinux())
+                await RunGioAsync(["remove", file], ct);
+            else
+                File.Delete(file);
+            removed.Add(Path.GetFileName(file));
+        }
+        return removed;
+    }
+
     private static void CopyWithFileSystem(string source, string targetDir, string target)
     {
         Directory.CreateDirectory(targetDir);

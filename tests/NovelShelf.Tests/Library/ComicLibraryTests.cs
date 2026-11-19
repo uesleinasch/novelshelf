@@ -132,6 +132,31 @@ public sealed class ComicLibraryTests : IDisposable
         Assert.False(File.Exists(book.Azw3Path + ".tmp"));
     }
 
+    [Fact]
+    public async Task Export_volumes_converts_only_the_selected_volumes()
+    {
+        var comic = _store.UpsertComic(_provider.Details("Invencível"));
+        await _downloader.DownloadNextAsync(comic.Id, 3, ct: Ct);
+        _store.SetVolumeSize(comic.Id, 2);
+        var exporter = new ComicExporter(_store, _paths, _downloader);
+        var reported = new List<ComicExportProgress>();
+
+        var all = await exporter.ExportVolumesAsync(comic.Id, KindleProfile.Default, ct: Ct);
+        var last = await exporter.ExportVolumesAsync(comic.Id, KindleProfile.Default,
+            plan => Core.Books.Volumes.Changed(plan, 2, everything: false), new SyncProgress(reported.Add), Ct);
+
+        Assert.Equal([$"hq-{comic.Slug}-vol01.azw3", $"hq-{comic.Slug}-vol02.azw3"], all.Books.Select(b => b.KindleFileName));
+        Assert.Equal([2, 1], all.Books.Select(b => b.ChapterCount));
+        Assert.Equal(3, all.TotalChapters);
+        Assert.Equal([2], last.Books.Select(b => b.Volume));
+        Assert.Equal(1, reported[^1].Total);
+    }
+
+    private sealed class SyncProgress(Action<ComicExportProgress> report) : IProgress<ComicExportProgress>
+    {
+        public void Report(ComicExportProgress value) => report(value);
+    }
+
     private static CancellationToken Ct => TestContext.Current.CancellationToken;
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);

@@ -14,39 +14,73 @@ public sealed record ExportedBook(
     string KindleFileName,
     string ThumbnailFileName,
     byte[]? CoverJpeg,
-    int ChapterCount);
+    int ChapterCount,
+    int Volume = 0);
+
+public sealed record VolumeExport(IReadOnlyList<ExportedBook> Books, IReadOnlyList<VolumeSpec> Plan, int TotalChapters);
 
 public sealed class BookExporter(LibraryStore store, AppPaths paths, PoliteHttpClient http)
 {
     public async Task<ExportedBook> ExportAsync(long novelId, BookStyle? defaultStyle = null, CancellationToken ct = default)
     {
+        var (novel, chapters) = Load(novelId);
+        var whole = new VolumeSpec(0, 0, chapters.Count);
+        return await BuildAsync(novel, chapters, whole, await GetCoverAsync(novel, ct), Style(novelId, defaultStyle));
+    }
+
+    public async Task<VolumeExport> ExportVolumesAsync(long novelId, BookStyle? defaultStyle = null,
+        Func<IReadOnlyList<VolumeSpec>, IEnumerable<VolumeSpec>>? select = null, CancellationToken ct = default)
+    {
+        var (novel, chapters) = Load(novelId);
+        var plan = Volumes.Split(chapters.Count, novel.VolumeSize);
+        var cover = await GetCoverAsync(novel, ct);
+        var style = Style(novelId, defaultStyle);
+        var books = new List<ExportedBook>();
+        foreach (var volume in select?.Invoke(plan) ?? plan)
+        {
+            ct.ThrowIfCancellationRequested();
+            books.Add(await BuildAsync(novel, chapters, volume, cover, style));
+        }
+        return new VolumeExport(books, plan, chapters.Count);
+    }
+
+    private (LibraryNovel Novel, IReadOnlyList<StoredChapter> Chapters) Load(long novelId)
+    {
         var novel = store.GetNovel(novelId) ?? throw new KeyNotFoundException($"Novel {novelId} não está na biblioteca.");
         var chapters = store.GetChapters(novelId);
         if (chapters.Count == 0)
             throw new InvalidOperationException($"'{novel.Title}' ainda não tem capítulos baixados.");
+        return (novel, chapters);
+    }
 
-        var cover = await GetCoverAsync(novel, ct);
-        var style = store.GetBookStyle(novelId) ?? defaultStyle ?? BookStyle.Default;
+    private BookStyle Style(long novelId, BookStyle? defaultStyle) =>
+        store.GetBookStyle(novelId) ?? defaultStyle ?? BookStyle.Default;
+
+    private Task<ExportedBook> BuildAsync(LibraryNovel novel, IReadOnlyList<StoredChapter> all, VolumeSpec volume, byte[]? cover, BookStyle style)
+    {
+        var chapters = all.Skip(volume.First).Take(volume.Count).ToList();
+        var key = Volumes.BookKey(novel.BookId, volume);
+        cover = Volumes.CoverFor(cover, volume);
         var content = new BookContent(
-            Identifier: $"urn:uuid:{Guid.ParseExact(novel.BookId, "N")}",
-            Title: novel.Title,
+            Identifier: Volumes.Identifier(key),
+            Title: Volumes.Title(novel.Title, volume),
             Author: novel.Author,
             Language: "pt-BR",
             Description: novel.Synopsis,
             Modified: chapters.Max(c => c.DownloadedAt),
             CoverJpeg: cover,
-            Chapters: chapters.Select((c, i) => new BookChapter(style.ChapterTitle(i + 1, c.Title), c.Html)).ToList(),
+            Chapters: chapters.Select((c, i) => new BookChapter(style.ChapterTitle(volume.First + i + 1, c.Title), c.Html)).ToList(),
             Style: style);
 
-        var baseName = FileNameFor(novel);
-        var epubPath = Path.Combine(paths.Books, baseName + ".epub");
-        var azw3Path = Path.Combine(paths.Books, baseName + ".azw3");
+        var fileName = Volumes.FileName(FileNameFor(novel), volume);
+        var azw3Path = Path.Combine(paths.Books, fileName);
+        var epubPath = Path.ChangeExtension(azw3Path, ".epub");
 
         WriteAtomically(epubPath, s => EpubWriter.Write(content, s));
-        var mobi = ToMobi(content, UniqueIdFor(novel.BookId));
+        var mobi = ToMobi(content, UniqueIdFor(key));
         WriteAtomically(azw3Path, mobi.Write);
 
-        return new ExportedBook(epubPath, azw3Path, baseName + ".azw3", mobi.ThumbnailFileName, cover, chapters.Count);
+        return Task.FromResult(new ExportedBook(epubPath, azw3Path, fileName, mobi.ThumbnailFileName, cover, chapters.Count, volume.Number));
     }
 
     public static MobiBook ToMobi(BookContent content, uint uniqueId) => new()

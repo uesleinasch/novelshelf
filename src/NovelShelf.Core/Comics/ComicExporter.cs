@@ -11,39 +11,68 @@ public sealed class ComicExporter(LibraryStore store, AppPaths paths, ComicDownl
     public async Task<ExportedBook> ExportAsync(
         long novelId, KindleProfile profile, IProgress<ComicExportProgress>? progress = null, CancellationToken ct = default)
     {
+        var (comic, stored) = Load(novelId);
+        var export = await ExportAsync(comic, stored, [new VolumeSpec(0, 0, stored.Count)], profile, progress, ct);
+        return export.Single();
+    }
+
+    public async Task<VolumeExport> ExportVolumesAsync(long novelId, KindleProfile profile,
+        Func<IReadOnlyList<VolumeSpec>, IEnumerable<VolumeSpec>>? select = null,
+        IProgress<ComicExportProgress>? progress = null, CancellationToken ct = default)
+    {
+        var (comic, stored) = Load(novelId);
+        var plan = Volumes.Split(stored.Count, comic.VolumeSize);
+        var books = await ExportAsync(comic, stored, (select?.Invoke(plan) ?? plan).ToList(), profile, progress, ct);
+        return new VolumeExport(books, plan, stored.Count);
+    }
+
+    private (LibraryNovel Comic, IReadOnlyList<StoredComicChapter> Chapters) Load(long novelId)
+    {
         var comic = store.GetNovel(novelId) ?? throw new KeyNotFoundException($"Obra {novelId} não está na biblioteca.");
         var stored = store.GetComicChapters(novelId);
         if (stored.Count == 0)
             throw new InvalidOperationException($"'{comic.Title}' ainda não tem capítulos baixados.");
+        return (comic, stored);
+    }
 
-        var options = new ComicPageOptions(profile, comic.RightToLeft, store.GetComicLayout(novelId));
-        var chapters = new List<ComicChapter>(stored.Count);
-        for (var i = 0; i < stored.Count; i++)
+    private async Task<IReadOnlyList<ExportedBook>> ExportAsync(LibraryNovel comic, IReadOnlyList<StoredComicChapter> stored,
+        IReadOnlyList<VolumeSpec> volumes, KindleProfile profile, IProgress<ComicExportProgress>? progress, CancellationToken ct)
+    {
+        var options = new ComicPageOptions(profile, comic.RightToLeft, store.GetComicLayout(comic.Id));
+        var cover = await CoverAsync(comic.Id, options, ct);
+        var total = volumes.Sum(v => v.Count);
+        var done = 0;
+        var books = new List<ExportedBook>();
+        foreach (var volume in volumes)
         {
-            ct.ThrowIfCancellationRequested();
-            var chapter = stored[i];
-            progress?.Report(new ComicExportProgress(i, stored.Count, chapter.Title));
-            var files = downloader.PageFiles(novelId, chapter);
-            var pages = await Task.WhenAll(files.Select(f => File.ReadAllBytesAsync(f, ct)));
-            var processed = await Task.Run(() => ComicPageProcessor.ProcessChapter(pages, options), ct);
-            chapters.Add(new ComicChapter(chapter.Title, processed));
+            var chapters = new List<ComicChapter>(volume.Count);
+            foreach (var chapter in stored.Skip(volume.First).Take(volume.Count))
+            {
+                ct.ThrowIfCancellationRequested();
+                progress?.Report(new ComicExportProgress(done++, total, chapter.Title));
+                var files = downloader.PageFiles(comic.Id, chapter);
+                var pages = await Task.WhenAll(files.Select(f => File.ReadAllBytesAsync(f, ct)));
+                var processed = await Task.Run(() => ComicPageProcessor.ProcessChapter(pages, options), ct);
+                chapters.Add(new ComicChapter(chapter.Title, processed));
+            }
+
+            var key = Volumes.BookKey(comic.BookId, volume);
+            var info = new ComicBookInfo(
+                Volumes.Title(comic.Title, volume), comic.Author, comic.Synopsis, "pt-BR",
+                stored.Skip(volume.First).Take(volume.Count).Max(c => c.DownloadedAt), BookExporter.UniqueIdFor(key),
+                Volumes.CoverFor(cover, volume));
+            var book = ComicBookBuilder.Build(info, chapters, profile, comic.RightToLeft);
+
+            var fileName = Volumes.FileName(BookExporter.FileNameFor(comic), volume);
+            var path = Path.Combine(paths.Books, fileName);
+            var temp = path + ".tmp";
+            await using (var stream = File.Create(temp))
+                book.Write(stream);
+            File.Move(temp, path, overwrite: true);
+            books.Add(new ExportedBook(null, path, fileName, book.ThumbnailFileName, book.CoverImage, volume.Count, volume.Number));
         }
-        progress?.Report(new ComicExportProgress(stored.Count, stored.Count, ""));
-
-        var cover = await CoverAsync(novelId, options, ct);
-        var info = new ComicBookInfo(
-            comic.Title, comic.Author, comic.Synopsis, "pt-BR",
-            stored.Max(c => c.DownloadedAt), BookExporter.UniqueIdFor(comic.BookId), cover);
-        var book = ComicBookBuilder.Build(info, chapters, profile, comic.RightToLeft);
-
-        var fileName = BookExporter.FileNameFor(comic) + ".azw3";
-        var path = Path.Combine(paths.Books, fileName);
-        var temp = path + ".tmp";
-        await using (var stream = File.Create(temp))
-            book.Write(stream);
-        File.Move(temp, path, overwrite: true);
-
-        return new ExportedBook(null, path, fileName, book.ThumbnailFileName, book.CoverImage, stored.Count);
+        progress?.Report(new ComicExportProgress(total, total, ""));
+        return books;
     }
 
     private async Task<byte[]?> CoverAsync(long novelId, ComicPageOptions options, CancellationToken ct)
