@@ -1,4 +1,5 @@
 using System.Text;
+using NovelShelf.Comics;
 using NovelShelf.Core.Library;
 using NovelShelf.Core.Net;
 using NovelShelf.Ebook;
@@ -88,8 +89,8 @@ public sealed class BookExporter(LibraryStore store, AppPaths paths, PoliteHttpC
 
         try
         {
-            var bytes = await http.GetBytesAsync(novel.CoverUrl, ct);
-            if (bytes.Length < 4 || bytes[0] != 0xFF || bytes[1] != 0xD8)
+            var bytes = CoverImage.ToJpeg(await http.GetBytesAsync(novel.CoverUrl, ct));
+            if (bytes is null)
                 return null;
             await File.WriteAllBytesAsync(cached, bytes, ct);
             return bytes;
