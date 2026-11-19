@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=NovelShelf
+Comment=Leia web novels no Kindle
+Exec=NovelShelf
+Icon=novelshelf
+Categories=Office;Viewer;
+Terminal=false
+StartupWMClass=NovelShelf
