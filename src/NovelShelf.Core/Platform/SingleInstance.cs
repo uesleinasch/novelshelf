@@ -32,17 +32,28 @@ public sealed class SingleInstance : IDisposable
 
     public static bool SignalExisting(string root, TimeSpan timeout)
     {
-        try
+        var deadline = DateTime.UtcNow + timeout;
+        while (true)
         {
-            using var client = new NamedPipeClientStream(".", PipeName(root), PipeDirection.Out, PipeOptions.CurrentUserOnly);
-            client.Connect((int)timeout.TotalMilliseconds);
-            client.WriteByte(1);
-            client.Flush();
-            return true;
-        }
-        catch (Exception e) when (e is TimeoutException or IOException or UnauthorizedAccessException)
-        {
-            return false;
+            var remaining = deadline - DateTime.UtcNow;
+            if (remaining <= TimeSpan.Zero)
+                return false;
+            try
+            {
+                using var client = new NamedPipeClientStream(".", PipeName(root), PipeDirection.Out, PipeOptions.CurrentUserOnly);
+                client.Connect((int)Math.Max(1, remaining.TotalMilliseconds));
+                client.WriteByte(1);
+                client.Flush();
+                return true;
+            }
+            catch (TimeoutException)
+            {
+                return false;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                Thread.Sleep(50);
+            }
         }
     }
 
