@@ -16,13 +16,16 @@ public sealed partial class LibraryItemViewModel : ViewModelBase
 {
     private readonly LibraryStore _store;
 
-    public LibraryItemViewModel(LibraryNovel novel, CoverLoader covers, LibraryStore store)
+    public LibraryItemViewModel(LibraryNovel novel, CoverLoader covers, LibraryStore store, LibraryViewModel owner)
     {
+        Owner = owner;
         _novel = novel;
         _store = store;
         _rightToLeft = novel.RightToLeft;
         _ = LoadCoverAsync(covers);
     }
+
+    public LibraryViewModel Owner { get; }
 
     public bool IsComic => Novel.Kind == WorkKind.Comic;
 
@@ -32,7 +35,7 @@ public sealed partial class LibraryItemViewModel : ViewModelBase
     partial void OnRightToLeftChanged(bool value) => _store.SetRightToLeft(Novel.Id, value);
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(Progress), nameof(KindleStatus), nameof(PendingForKindle))]
+    [NotifyPropertyChangedFor(nameof(Progress), nameof(KindleStatus), nameof(KindleBadge), nameof(PendingForKindle))]
     private LibraryNovel _novel;
 
     [ObservableProperty]
@@ -49,6 +52,14 @@ public sealed partial class LibraryItemViewModel : ViewModelBase
         : PendingForKindle > 0
             ? $"Kindle tem {Novel.SentChapterCount} capítulos — {PendingForKindle} novos para enviar"
             : $"Kindle em dia ({Novel.SentChapterCount} capítulos)";
+
+    public string ExportMenuHeader => IsComic ? "Converter para Kindle" : "Gerar livro";
+
+    public string KindleBadge => Novel.SentAt is null
+        ? "Não enviado"
+        : PendingForKindle > 0
+            ? $"{PendingForKindle} novos para o Kindle"
+            : "Kindle em dia";
 
     private async Task LoadCoverAsync(CoverLoader covers) => Cover = await covers.LoadAsync(Novel.CoverUrl, Novel.Id);
 }
@@ -80,7 +91,23 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DownloadCommand), nameof(SendToKindleCommand), nameof(ExportCommand), nameof(RemoveCommand), nameof(EjectKindleCommand), nameof(AdjustLayoutCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DownloadItemCommand), nameof(SendItemToKindleCommand), nameof(ExportItemCommand), nameof(RemoveItemCommand))]
     private bool _isBusy;
+
+    [ObservableProperty]
+    private bool _isGridView = services.Settings.LibraryGrid;
+
+    partial void OnIsGridViewChanged(bool value)
+    {
+        services.Settings.LibraryGrid = value;
+        services.Settings.Save();
+    }
+
+    [RelayCommand]
+    private void ShowList() => IsGridView = false;
+
+    [RelayCommand]
+    private void ShowGrid() => IsGridView = true;
 
     [ObservableProperty]
     private double _progressValue;
@@ -105,7 +132,7 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
         var keep = select ?? Selected?.Novel.Id;
         Novels.Clear();
         foreach (var novel in services.Library.GetNovels())
-            Novels.Add(new LibraryItemViewModel(novel, services.Covers, services.Library));
+            Novels.Add(new LibraryItemViewModel(novel, services.Covers, services.Library, this));
         Selected = Novels.FirstOrDefault(n => n.Novel.Id == keep) ?? Novels.FirstOrDefault();
         OnPropertyChanged(nameof(HasNovels));
     }
@@ -193,6 +220,30 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
     }
 
     private bool CanEject() => !IsBusy;
+
+    [RelayCommand(CanExecute = nameof(CanEject))]
+    private Task DownloadItemAsync(LibraryItemViewModel item) => RunOnAsync(item, DownloadCommand);
+
+    [RelayCommand(CanExecute = nameof(CanEject))]
+    private Task SendItemToKindleAsync(LibraryItemViewModel item) => RunOnAsync(item, SendToKindleCommand);
+
+    [RelayCommand(CanExecute = nameof(CanEject))]
+    private Task ExportItemAsync(LibraryItemViewModel item) => RunOnAsync(item, ExportCommand);
+
+    [RelayCommand(CanExecute = nameof(CanEject))]
+    private void RemoveItem(LibraryItemViewModel item)
+    {
+        Selected = item;
+        if (RemoveCommand.CanExecute(null))
+            RemoveCommand.Execute(null);
+    }
+
+    private async Task RunOnAsync(LibraryItemViewModel item, IAsyncRelayCommand command)
+    {
+        Selected = item;
+        if (command.CanExecute(null))
+            await command.ExecuteAsync(null);
+    }
 
     [RelayCommand(CanExecute = nameof(CanEject))]
     private async Task EjectKindleAsync()
