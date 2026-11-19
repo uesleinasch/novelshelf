@@ -134,10 +134,6 @@ public sealed class LibraryStore
             Execute(db, """
                 BEGIN;
                 ALTER TABLE novels ADD COLUMN caught_up INTEGER NOT NULL DEFAULT 0;
-                UPDATE novels SET caught_up = 1
-                WHERE remote_chapter_count IS NOT NULL
-                  AND (SELECT COUNT(*) FROM chapters c WHERE c.novel_id = novels.id)
-                    + (SELECT COUNT(*) FROM comic_chapters cc WHERE cc.novel_id = novels.id) >= remote_chapter_count;
                 PRAGMA user_version = 5;
                 COMMIT;
                 """);
