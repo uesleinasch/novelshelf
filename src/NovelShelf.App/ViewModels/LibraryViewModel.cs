@@ -79,7 +79,7 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
     private double _chaptersToDownload = 50;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(DownloadCommand), nameof(SendToKindleCommand), nameof(ExportCommand), nameof(RemoveCommand))]
+    [NotifyCanExecuteChangedFor(nameof(DownloadCommand), nameof(SendToKindleCommand), nameof(ExportCommand), nameof(RemoveCommand), nameof(EjectKindleCommand))]
     private bool _isBusy;
 
     [ObservableProperty]
@@ -190,6 +190,19 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
             StatusMessage = p.Done < p.Total ? $"Ajustando páginas: {p.Done + 1}/{p.Total} — {p.ChapterTitle}" : "Montando o AZW3...";
         });
         return await services.ComicExporter.ExportAsync(item.Novel.Id, services.KindleProfile, progress);
+    }
+
+    private bool CanEject() => !IsBusy;
+
+    [RelayCommand(CanExecute = nameof(CanEject))]
+    private async Task EjectKindleAsync()
+    {
+        await RunAsync("Ejetando o Kindle", async () =>
+        {
+            if (!kindle.IsConnected)
+                await kindle.DetectAsync();
+            Success("Kindle ejetado", await kindle.EjectSelectedAsync());
+        });
     }
 
     [RelayCommand]

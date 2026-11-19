@@ -75,7 +75,9 @@ Os executáveis já trazem o runtime do .NET. Não é preciso instalar nada.
 2. **Adicionar à biblioteca.** A novel vai para a aba **Biblioteca**.
 3. **Baixar capítulos.** Escolha quantos capítulos baixar (padrão: 50) e clique em **Baixar**. Dá para cancelar; o que já baixou fica salvo.
 4. **Enviar para o Kindle.** Conecte o Kindle no USB, desbloqueie a tela e clique em **Enviar**. O app gera o livro e copia para o aparelho.
-5. **Ejete o Kindle.** Só depois de ejetar ele atualiza a biblioteca.
+5. **Ejetar.** Clique em **Ejetar**, na biblioteca ou na página Kindle, e desconecte o cabo. Só depois de ejetar o Kindle atualiza a biblioteca.
+   - **Linux:** usa o `gio`, como o gerenciador de arquivos (disco USB e MTP).
+   - **Windows:** usa o "Ejetar" do Explorer.
 
 A lista mostra, para cada novel, quantos capítulos estão no PC e quantos já estão no Kindle. Por exemplo: *"Kindle tem 120 capítulos — 15 novos para enviar"*.
 

@@ -70,6 +70,8 @@
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button Content="Procurar Kindle" Command="{Binding Kindle.DetectCommand}" />
                                 <Button Classes="accent" Content="Enviar" Command="{Binding SendToKindleCommand}" />
+                                <Button Content="Ejetar" Command="{Binding EjectKindleCommand}"
+                                        ToolTip.Tip="Libera o Kindle para desconectar e atualizar a biblioteca" />
                             </StackPanel>
                         </ui:FASettingsExpander.Footer>
                     </ui:FASettingsExpander>

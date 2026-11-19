@@ -25,6 +25,7 @@ public sealed class AppServices
         Exporter = new BookExporter(Library, paths, Http);
         Locator = new KindleLocator();
         Sender = new KindleSender();
+        Ejector = new KindleEjector();
 
         var mangaPaths = new SuwayomiPaths(Path.Combine(paths.Root, "suwayomi"));
         var downloads = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
@@ -48,6 +49,7 @@ public sealed class AppServices
     public BookExporter Exporter { get; }
     public KindleLocator Locator { get; }
     public KindleSender Sender { get; }
+    public KindleEjector Ejector { get; }
     public MangaBackend Manga { get; }
     public ComicDownloader ComicDownloader { get; }
     public ComicExporter ComicExporter { get; }

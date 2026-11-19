@@ -16,8 +16,18 @@
                     <TextBlock Text="Procurar Kindle" />
                 </StackPanel>
             </Button>
+            <Button Command="{Binding EjectCommand}" ToolTip.Tip="Grava o que falta e libera o Kindle para desconectar">
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <ui:FASymbolIcon Symbol="Upload" />
+                    <TextBlock Text="Ejetar Kindle" />
+                </StackPanel>
+            </Button>
             <ui:FAProgressRing IsIndeterminate="True" Width="20" Height="20" IsVisible="{Binding IsSearching}" />
+            <ui:FAProgressRing IsIndeterminate="True" Width="20" Height="20" IsVisible="{Binding IsEjecting}" />
         </StackPanel>
+        <ui:FAInfoBar Title="Ejetar" Message="{Binding EjectMessage}" IsClosable="True"
+                      Severity="{Binding EjectSeverity}"
+                      IsOpen="{Binding EjectMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
         <ui:FAInfoBar Title="Nenhum Kindle encontrado" IsOpen="{Binding !IsConnected}" IsClosable="False" Severity="Warning"
                       Message="No Linux o Kindle aparece como disco (USB) ou como MTP no gerenciador de arquivos. Se for MTP, abra-o uma vez no Arquivos/Nautilus e procure de novo." />
         <ui:FASettingsExpander Header="Modelo do Kindle" Description="Usado para ajustar as páginas de mangás e HQs ao tamanho da tela.">
