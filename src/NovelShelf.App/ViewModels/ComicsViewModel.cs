@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using Avalonia.Media.Imaging;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -88,6 +89,7 @@ public enum ComicsMode
     Sources,
     Browse,
     Manage,
+    Configure,
 }
 
 public sealed partial class ComicsViewModel(AppServices services, Action<long> openInLibrary) : ViewModelBase
@@ -102,6 +104,7 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
     public ObservableCollection<SourceCardViewModel> SourceCards { get; } = [];
     public ObservableCollection<ComicCardViewModel> Results { get; } = [];
     public ObservableCollection<ExtensionItemViewModel> Extensions { get; } = [];
+    public ObservableCollection<SourcePreferenceViewModel> Preferences { get; } = [];
 
     public static long DownloadSizeMb => SuwayomiInstaller.DownloadSize / 1_000_000;
 
@@ -121,23 +124,35 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
     private double _installPercent;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsReady), nameof(ShowSources), nameof(ShowBrowse), nameof(ShowManage))]
+    [NotifyPropertyChangedFor(nameof(IsReady), nameof(ShowSources), nameof(ShowBrowse), nameof(ShowManage), nameof(ShowConfigure))]
     private bool _isStarting;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsReady), nameof(ShowSources), nameof(ShowBrowse), nameof(ShowManage))]
+    [NotifyPropertyChangedFor(nameof(IsReady), nameof(ShowSources), nameof(ShowBrowse), nameof(ShowManage), nameof(ShowConfigure))]
     private bool _isRunning;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowSources), nameof(ShowBrowse), nameof(ShowManage), nameof(PageTitle))]
+    [NotifyPropertyChangedFor(nameof(ShowSources), nameof(ShowBrowse), nameof(ShowManage), nameof(ShowConfigure), nameof(PageTitle))]
     private ComicsMode _mode;
 
     [ObservableProperty]
     private string? _error;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CanBrowseLatest), nameof(PageTitle))]
+    [NotifyPropertyChangedFor(nameof(CanBrowseLatest), nameof(PageTitle), nameof(CanLogin), nameof(CanConfigure))]
+    [NotifyCanExecuteChangedFor(nameof(OpenLoginCommand), nameof(ConfigureSourceCommand))]
     private ComicSourceInfo? _selectedSource;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(SavePreferencesCommand))]
+    private bool _isLoadingPreferences;
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OpenLoginCommand))]
+    private bool _isOpeningLogin;
+
+    [ObservableProperty]
+    private string? _loginStatus;
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(SearchCommand))]
@@ -181,10 +196,13 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
     public bool ShowSources => IsReady && Mode == ComicsMode.Sources;
     public bool ShowBrowse => IsReady && Mode == ComicsMode.Browse;
     public bool ShowManage => IsReady && Mode == ComicsMode.Manage;
+    public bool ShowConfigure => IsReady && Mode == ComicsMode.Configure;
     public bool HasSelection => Selected is not null;
     public bool HasDetails => Details is not null;
     public bool HasSources => SourceCards.Count > 0;
     public bool CanBrowseLatest => SelectedSource?.SupportsLatest == true;
+    public bool CanLogin => SelectedSource?.HomeUrl is not null;
+    public bool CanConfigure => SelectedSource?.IsConfigurable == true;
     public bool IsPopular => CurrentListing == ComicListing.Popular;
     public bool IsLatest => CurrentListing == ComicListing.Latest;
 
@@ -192,6 +210,7 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
     {
         ComicsMode.Browse when SelectedSource is { } source => source.Name,
         ComicsMode.Manage => "Gerenciar fontes",
+        ComicsMode.Configure when SelectedSource is { } source => $"Configurar {source.Name}",
         _ => "Mangás, manhwas e HQs",
     };
 
@@ -294,12 +313,19 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
     [RelayCommand]
     private void BackToSources()
     {
+        if (Mode == ComicsMode.Configure)
+        {
+            Error = null;
+            Mode = ComicsMode.Browse;
+            return;
+        }
         _browseVersion++;
         IsBusy = false;
         Error = null;
         Results.Clear();
         Selected = null;
         HasMore = false;
+        LoginStatus = null;
         Mode = ComicsMode.Sources;
     }
 
@@ -341,6 +367,7 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
             return;
         var version = ++_browseVersion;
         Error = null;
+        LoginStatus = null;
         IsBusy = true;
         CurrentListing = listing;
         _lastQuery = Query.Trim();
@@ -368,13 +395,103 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
         catch (Exception e) when (e is InvalidOperationException or HttpRequestException or TaskCanceledException)
         {
             if (version == _browseVersion)
-                Error = e.Message;
+                Error = WithLoginHint(e.Message);
         }
         finally
         {
             if (version == _browseVersion)
                 IsBusy = false;
         }
+    }
+
+    private bool CanOpenLogin() => CanLogin && !IsOpeningLogin;
+
+    [RelayCommand(CanExecute = nameof(CanOpenLogin), IncludeCancelCommand = true)]
+    private async Task OpenLoginAsync(CancellationToken ct)
+    {
+        if (SelectedSource?.HomeUrl is not { } home)
+            return;
+        Error = null;
+        LoginStatus = null;
+        IsOpeningLogin = true;
+        try
+        {
+            var page = await services.Manga.Client.PrepareWebViewAsync(home, ct);
+            Process.Start(new ProcessStartInfo(page.AbsoluteUri) { UseShellExecute = true });
+            LoginStatus = "A página do site abriu no seu navegador. Faça login por lá e depois toque em Populares para recarregar a fonte.";
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception e) when (e is InvalidOperationException or HttpRequestException or System.ComponentModel.Win32Exception)
+        {
+            Error = $"Não deu para abrir a página de login: {e.Message}";
+        }
+        finally
+        {
+            IsOpeningLogin = false;
+        }
+    }
+
+    private string WithLoginHint(string message)
+    {
+        if (!message.Contains("login", StringComparison.OrdinalIgnoreCase))
+            return message;
+        if (CanConfigure)
+            return $"{message} Abra “Configurar fonte”, informe sua conta e salve.";
+        return CanLogin ? $"{message} Use o botão “Entrar no site”, faça login na página que abrir e tente de novo." : message;
+    }
+
+    [RelayCommand(CanExecute = nameof(CanConfigure))]
+    private async Task ConfigureSourceAsync()
+    {
+        if (SelectedSource is not { } source)
+            return;
+        Error = null;
+        LoginStatus = null;
+        Preferences.Clear();
+        Mode = ComicsMode.Configure;
+        IsLoadingPreferences = true;
+        try
+        {
+            foreach (var preference in await services.Manga.Client.GetSourcePreferencesAsync(source.Id))
+                Preferences.Add(new SourcePreferenceViewModel(preference));
+        }
+        catch (Exception e) when (e is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            Error = e.Message;
+        }
+        finally
+        {
+            IsLoadingPreferences = false;
+        }
+    }
+
+    private bool CanSavePreferences() => !IsLoadingPreferences;
+
+    [RelayCommand(CanExecute = nameof(CanSavePreferences))]
+    private async Task SavePreferencesAsync()
+    {
+        if (SelectedSource is not { } source)
+            return;
+        Error = null;
+        IsLoadingPreferences = true;
+        try
+        {
+            foreach (var edited in Preferences.Select(p => p.Edited()).OfType<SourcePreference>())
+                await services.Manga.Client.SetSourcePreferenceAsync(source.Id, edited);
+        }
+        catch (Exception e) when (e is InvalidOperationException or HttpRequestException or TaskCanceledException)
+        {
+            Error = $"Não deu para salvar a configuração: {e.Message}";
+            return;
+        }
+        finally
+        {
+            IsLoadingPreferences = false;
+        }
+        Mode = ComicsMode.Browse;
+        await BrowseAsync(ComicListing.Popular, 1);
     }
 
     partial void OnSelectedChanged(ComicCardViewModel? value)
@@ -395,7 +512,7 @@ public sealed partial class ComicsViewModel(AppServices services, Action<long> o
         catch (Exception e) when (e is InvalidOperationException or HttpRequestException or TaskCanceledException)
         {
             if (Selected == card)
-                Error = e.Message;
+                Error = WithLoginHint(e.Message);
         }
     }
 

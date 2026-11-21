@@ -7,7 +7,7 @@ public enum ComicListing
     Search,
 }
 
-public sealed record ComicSourceInfo(string Id, string Name, string Language, bool IsNsfw, bool SupportsLatest, Uri? IconUrl = null);
+public sealed record ComicSourceInfo(string Id, string Name, string Language, bool IsNsfw, bool SupportsLatest, Uri? IconUrl = null, Uri? HomeUrl = null, bool IsConfigurable = false);
 
 public sealed record ComicSummary(string SourceId, string Key, string Title, string? Author, Uri? ThumbnailUrl);
 
