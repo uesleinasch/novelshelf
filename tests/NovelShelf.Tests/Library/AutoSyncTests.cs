@@ -117,6 +117,7 @@ public sealed class AutoSyncTests
                     ALTER TABLE novels DROP COLUMN caught_up;
                     ALTER TABLE novels DROP COLUMN volume_size;
                     ALTER TABLE novels DROP COLUMN sent_volume_size;
+                    ALTER TABLE novels DROP COLUMN resend_ranges;
                     PRAGMA user_version = 4;
                     """;
                 cmd.ExecuteNonQuery();
