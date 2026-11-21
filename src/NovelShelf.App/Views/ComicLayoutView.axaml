@@ -122,6 +122,7 @@
                         <ComboBoxItem Content="Páginas (mangá, HQ)" />
                         <ComboBoxItem Content="Tira contínua (webtoon)" />
                         <ComboBoxItem Content="Faixas deitadas (ler com o Kindle deitado)" />
+                        <ComboBoxItem Content="Quadro a quadro (ler com o Kindle em pé)" />
                     </ComboBox>
                     <TextBlock Text="{Binding DetectedLabel}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
                 </StackPanel>
@@ -192,9 +193,18 @@
                                FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
                     <TextBlock Text="{Binding Overlap, StringFormat='Repetir entre pedaços: {0:0}%'}" FontSize="12" Margin="0,8,0,0" />
                     <Slider Minimum="0" Maximum="40" Value="{Binding Overlap}" TickFrequency="1" IsSnapToTickEnabled="True" />
-                    <ToggleSwitch IsChecked="{Binding PageBeforeBands}" Margin="0,4,0,0"
+                </StackPanel>
+
+                <StackPanel Spacing="6" IsVisible="{Binding ShowPanelOptions}">
+                    <TextBlock Text="Quadro a quadro" FontWeight="SemiBold" />
+                    <TextBlock Text="Cada quadro vira uma tela, na ordem de leitura, com o Kindle em pé. A letra fica bem maior, mas a página rende mais telas. Quadro pequeno é ampliado no máximo 3 vezes para não borrar."
+                               FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel Spacing="6" IsVisible="{Binding ShowCutOptions}">
+                    <ToggleSwitch IsChecked="{Binding PageBeforeBands}"
                                   OnContent="Mostrar a página inteira antes dos pedaços" OffContent="Só os pedaços" />
-                    <Button Content="Editar linhas de corte" Command="{Binding OpenCutEditorCommand}" Margin="0,8,0,0"
+                    <Button Content="Editar linhas de corte" Command="{Binding OpenCutEditorCommand}"
                             ToolTip.Tip="Abre as páginas suspeitas deste capítulo. Clicar no preview abre a página da tela mostrada." />
                 </StackPanel>
 

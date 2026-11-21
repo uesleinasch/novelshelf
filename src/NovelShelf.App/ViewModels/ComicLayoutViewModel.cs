@@ -105,7 +105,8 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     private bool _detectedStrip;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowStripOptions), nameof(ShowPageOptions), nameof(ShowLandscapeOptions), nameof(ShowVerticalMargins))]
+    [NotifyPropertyChangedFor(nameof(ShowStripOptions), nameof(ShowPageOptions), nameof(ShowLandscapeOptions), nameof(ShowVerticalMargins),
+        nameof(ShowPanelOptions), nameof(ShowCutOptions))]
     [NotifyCanExecuteChangedFor(nameof(OpenCutEditorCommand))]
     private int _modeIndex;
 
@@ -162,7 +163,9 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     public bool UsesStrip => ModeIndex == (int)ComicReadingMode.Strip || (ModeIndex == (int)ComicReadingMode.Auto && DetectedStrip);
     public bool ShowLandscapeOptions => ModeIndex == (int)ComicReadingMode.Landscape;
     public bool ShowStripOptions => UsesStrip;
-    public bool ShowPageOptions => !UsesStrip && !ShowLandscapeOptions;
+    public bool ShowPanelOptions => ModeIndex == (int)ComicReadingMode.Panels;
+    public bool ShowCutOptions => ShowLandscapeOptions || ShowPanelOptions;
+    public bool ShowPageOptions => !UsesStrip && !ShowCutOptions;
     public bool ShowVerticalMargins => !UsesStrip;
     public bool ShowManualMargins => MarginIndex == 2;
     public string DetectedLabel => DetectedStrip
@@ -268,14 +271,14 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
             DetectedStrip = ComicPageProcessor.IsWebtoon(pages);
             OnPropertyChanged(nameof(UsesStrip));
             var options = new ComicPageOptions(_services.KindleProfile, RightToLeft, Layout);
-            var landscape = options.EffectiveLayout.Mode == ComicReadingMode.Landscape;
-            var cuts = landscape ? _services.Library.GetPageCuts(_comic.Id, chapter.Key) : null;
-            var byPage = await Task.Run(() => landscape
+            var byScreen = options.EffectiveLayout.UsesPageCuts;
+            var cuts = byScreen ? _services.Library.GetPageCuts(_comic.Id, chapter.Key) : null;
+            var byPage = await Task.Run(() => byScreen
                 ? ComicPageProcessor.ProcessChapterByPage(pages, options, cuts, ct)
                 : [ComicPageProcessor.ProcessChapter(pages, options, ct)], ct);
             ct.ThrowIfCancellationRequested();
             _rendered = byPage.SelectMany(p => p).ToList();
-            _screenPages = landscape ? byPage.SelectMany((screens, page) => screens.Select(_ => page)).ToList() : [];
+            _screenPages = byScreen ? byPage.SelectMany((screens, page) => screens.Select(_ => page)).ToList() : [];
             var rendered = _rendered;
             PageCount = rendered.Count;
             if (PageIndex > LastPageIndex)
@@ -380,7 +383,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
         RefreshCacheSize();
     }
 
-    private bool CanEditCuts() => ShowLandscapeOptions && Chapter is not null && !IsRendering && CutEditor is null;
+    private bool CanEditCuts() => ShowCutOptions && Chapter is not null && !IsRendering && CutEditor is null;
 
     [RelayCommand(CanExecute = nameof(CanEditCuts))]
     private async Task OpenCutEditorAsync()

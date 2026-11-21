@@ -23,12 +23,12 @@ public sealed partial class CutPageItem(int index, PageCut plan, bool isManual) 
     public bool IsSuspect => !IsManual && Plan.IsSuspect;
 
     public string Detail => IsManual
-        ? $"linhas manuais · {Screens(Plan.Screens.Count)}"
-        : Plan.Kind == PageCutKind.PanelRows && !Plan.IsSuspect
-            ? $"linhas de quadros · {Screens(Plan.Screens.Count)}"
+        ? $"linhas manuais · {Screens(Plan.ScreenCount)}"
+        : Plan.Kind is PageCutKind.PanelRows or PageCutKind.Panels && !Plan.IsSuspect
+            ? $"{(Plan.Kind == PageCutKind.Panels ? "quadros" : "linhas de quadros")} · {Screens(Plan.ScreenCount)}"
         : Plan.IsSuspect
             ? $"{Describe(Plan.Suspicion)} · confiança {Plan.Confidence:P0}"
-            : Screens(Plan.Screens.Count);
+            : Screens(Plan.ScreenCount);
 
     private static string Screens(int count) => count == 1 ? "1 tela" : $"{count} telas";
 
@@ -108,7 +108,7 @@ public sealed partial class CutEditorViewModel : ViewModelBase
         var manual = _store.GetPageCuts(_comicId, _chapter.Key);
         var plans = await Task.Run(() => _pages
             .AsParallel().AsOrdered()
-            .Select((page, i) => ComicPageProcessor.PlanLandscape(page, _options, manual.GetValueOrDefault(i)))
+            .Select((page, i) => ComicPageProcessor.PlanPage(page, _options, manual.GetValueOrDefault(i)))
             .ToList());
         _all = plans.Select((plan, i) => plan is null ? null : new CutPageItem(i, plan, manual.ContainsKey(i)))
             .OfType<CutPageItem>()
@@ -187,7 +187,7 @@ public sealed partial class CutEditorViewModel : ViewModelBase
     private async Task ReplanAsync(CutPageItem item, PageCuts? cuts)
     {
         var page = _pages[item.Index];
-        if (await Task.Run(() => ComicPageProcessor.PlanLandscape(page, _options, cuts)) is { } plan)
+        if (await Task.Run(() => ComicPageProcessor.PlanPage(page, _options, cuts)) is { } plan)
             item.Plan = plan;
         OnPropertyChanged(nameof(PageTitle));
     }
@@ -197,7 +197,19 @@ public sealed partial class CutEditorViewModel : ViewModelBase
         Rows = plan.Screens.Zip(plan.Screens.Skip(1))
             .Select(pair => plan.ToSourceFraction((pair.First.Bottom + pair.Second.Top) / 2))
             .ToList(),
+        Columns = plan.Kind == PageCutKind.Panels ? ColumnsFrom(plan) : [],
     };
+
+    private static List<VerticalCut> ColumnsFrom(PageCut plan) => plan.Screens
+        .SelectMany(row =>
+        {
+            var inRow = plan.Panels.Where(p => p.Top < row.Bottom && p.Bottom > row.Top).OrderBy(p => p.Left).ToList();
+            var middle = plan.ToSourceFraction((row.Top + row.Bottom) / 2);
+            return inRow.Zip(inRow.Skip(1))
+                .Where(pair => pair.Second.Left >= pair.First.Right - 2)
+                .Select(pair => new VerticalCut(plan.ToSourceFractionX((pair.First.Right + pair.Second.Left) / 2), middle));
+        })
+        .ToList();
 
     private bool HasSelection() => Selected is not null;
     private bool CanGoBack() => Selected is not null && Visible.IndexOf(Selected) > 0;
