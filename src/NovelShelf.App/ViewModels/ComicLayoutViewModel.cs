@@ -16,6 +16,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     private ComicLayout _saved;
     private readonly Dictionary<string, IReadOnlyList<byte[]>> _sources = [];
     private IReadOnlyList<byte[]> _rendered = [];
+    private IReadOnlyList<int> _screenPages = [];
     private CancellationTokenSource? _render;
     private bool _loading = true;
 
@@ -56,7 +57,15 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     public bool HasChapters => Chapters.Count > 0;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OpenCutEditorCommand))]
     private StoredComicChapter? _chapter;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsEditingCuts))]
+    [NotifyCanExecuteChangedFor(nameof(OpenCutEditorCommand))]
+    private CutEditorViewModel? _cutEditor;
+
+    public bool IsEditingCuts => CutEditor is not null;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PageLabel))]
@@ -72,7 +81,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     private Bitmap? _preview;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyCommand), nameof(OpenCutEditorCommand))]
     private bool _isRendering;
 
     [ObservableProperty]
@@ -94,6 +103,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShowStripOptions), nameof(ShowPageOptions), nameof(ShowLandscapeOptions), nameof(ShowVerticalMargins))]
+    [NotifyCanExecuteChangedFor(nameof(OpenCutEditorCommand))]
     private int _modeIndex;
 
     [ObservableProperty]
@@ -255,9 +265,15 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
             DetectedStrip = ComicPageProcessor.IsWebtoon(pages);
             OnPropertyChanged(nameof(UsesStrip));
             var options = new ComicPageOptions(_services.KindleProfile, RightToLeft, Layout);
-            var rendered = await Task.Run(() => ComicPageProcessor.ProcessChapter(pages, options, ct), ct);
+            var landscape = options.EffectiveLayout.Mode == ComicReadingMode.Landscape;
+            var cuts = landscape ? _services.Library.GetPageCuts(_comic.Id, chapter.Key) : null;
+            var byPage = await Task.Run(() => landscape
+                ? ComicPageProcessor.ProcessChapterByPage(pages, options, cuts, ct)
+                : [ComicPageProcessor.ProcessChapter(pages, options, ct)], ct);
             ct.ThrowIfCancellationRequested();
-            _rendered = rendered;
+            _rendered = byPage.SelectMany(p => p).ToList();
+            _screenPages = landscape ? byPage.SelectMany((screens, page) => screens.Select(_ => page)).ToList() : [];
+            var rendered = _rendered;
             PageCount = rendered.Count;
             if (PageIndex > LastPageIndex)
                 PageIndex = LastPageIndex;
@@ -326,6 +342,34 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
         _services.Library.SetRightToLeft(_comic.Id, RightToLeft);
         MessageIsError = false;
         Message = "Ajustes salvos para esta obra. Converter e Enviar já usam o novo enquadramento.";
+    }
+
+    private bool CanEditCuts() => ShowLandscapeOptions && Chapter is not null && !IsRendering && CutEditor is null;
+
+    [RelayCommand(CanExecute = nameof(CanEditCuts))]
+    private async Task OpenCutEditorAsync()
+    {
+        var chapter = Chapter!;
+        var pages = await SourcePagesAsync(chapter, CancellationToken.None);
+        var options = new ComicPageOptions(_services.KindleProfile, RightToLeft, Layout);
+        int? start = PageIndex < _screenPages.Count ? _screenPages[PageIndex] : null;
+        var editor = new CutEditorViewModel(_services.Library, _comic.Id, chapter, pages, options, CloseCutEditor);
+        CutEditor = editor;
+        await editor.LoadAsync(start);
+    }
+
+    public void OpenCutEditorFromPreview()
+    {
+        if (OpenCutEditorCommand.CanExecute(null))
+            OpenCutEditorCommand.Execute(null);
+    }
+
+    private void CloseCutEditor()
+    {
+        var changed = CutEditor?.Changed == true;
+        CutEditor = null;
+        if (changed)
+            ScheduleRender();
     }
 
     [RelayCommand]

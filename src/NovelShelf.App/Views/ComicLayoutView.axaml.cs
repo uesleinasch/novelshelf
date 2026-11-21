@@ -15,6 +15,12 @@ public partial class ComicLayoutView : UserControl
             vm.Confirm = ConfirmAsync;
     }
 
+    private void OnPreviewPressed(object? sender, Avalonia.Input.PointerPressedEventArgs e)
+    {
+        if (DataContext is ComicLayoutViewModel vm)
+            vm.OpenCutEditorFromPreview();
+    }
+
     private async Task<bool> ConfirmAsync(string title, string message)
     {
         var dialog = new FAContentDialog

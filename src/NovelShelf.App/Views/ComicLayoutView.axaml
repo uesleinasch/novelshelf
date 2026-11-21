@@ -3,6 +3,7 @@
              xmlns:ui="using:FluentAvalonia.UI.Controls"
              xmlns:vm="using:NovelShelf.App.ViewModels"
              xmlns:lib="using:NovelShelf.Core.Library"
+             xmlns:views="using:NovelShelf.App.Views"
              x:Class="NovelShelf.App.Views.ComicLayoutView"
              x:DataType="vm:ComicLayoutViewModel">
     <Grid RowDefinitions="Auto,*" ColumnDefinitions="*,400" Margin="24,16">
@@ -16,12 +17,12 @@
             </StackPanel>
         </Grid>
 
-        <Grid Grid.Row="1" RowDefinitions="*,Auto,Auto">
+        <Grid Grid.Row="1" RowDefinitions="*,Auto,Auto" IsVisible="{Binding !IsEditingCuts}">
             <TextBlock Text="Baixe pelo menos um capítulo para ver o preview." Opacity="0.75" IsVisible="{Binding !HasChapters}" />
             <Border Padding="18" CornerRadius="18" Background="#1f1f1f" HorizontalAlignment="Center" IsVisible="{Binding HasChapters}">
                 <Panel>
                     <Border Background="White">
-                        <Image Source="{Binding Preview}" Stretch="Uniform" />
+                        <Image Source="{Binding Preview}" Stretch="Uniform" PointerPressed="OnPreviewPressed" />
                     </Border>
                     <ui:FAProgressRing IsIndeterminate="True" Width="48" Height="48" IsVisible="{Binding IsRendering}" />
                 </Panel>
@@ -48,6 +49,54 @@
             <Slider Grid.Row="2" Minimum="0" Maximum="{Binding LastPageIndex}" Value="{Binding PageIndex}"
                     IsSnapToTickEnabled="True" TickFrequency="1" IsVisible="{Binding HasChapters}" />
         </Grid>
+
+        <Panel Grid.Row="1" IsVisible="{Binding IsEditingCuts}">
+        <Grid ColumnDefinitions="240,*" RowDefinitions="Auto,*,Auto"
+              DataContext="{Binding CutEditor}" x:DataType="vm:CutEditorViewModel">
+            <Grid.KeyBindings>
+                <KeyBinding Gesture="Left" Command="{Binding PreviousCommand}" />
+                <KeyBinding Gesture="PageUp" Command="{Binding PreviousCommand}" />
+                <KeyBinding Gesture="Right" Command="{Binding NextCommand}" />
+                <KeyBinding Gesture="PageDown" Command="{Binding NextCommand}" />
+                <KeyBinding Gesture="Escape" Command="{Binding CloseCommand}" />
+            </Grid.KeyBindings>
+            <StackPanel Grid.ColumnSpan="2" Spacing="4" Margin="0,0,0,8">
+                <TextBlock Text="{Binding ChapterTitle, StringFormat='Linhas de corte — {0}'}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="Arraste uma linha para mover. Clique duplo cria uma linha horizontal; Shift + clique duplo cria uma vertical. Clique numa linha e Delete apaga. ← → ou PgUp PgDn trocam de página. Esc fecha."
+                           FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+            </StackPanel>
+            <DockPanel Grid.Row="1" Grid.RowSpan="2" Margin="0,0,12,0">
+                <TextBlock DockPanel.Dock="Top" Text="{Binding Summary}" FontSize="12" Opacity="0.8" TextWrapping="Wrap" Margin="0,0,0,6" />
+                <ToggleSwitch DockPanel.Dock="Top" IsChecked="{Binding OnlySuspect}" OnContent="Só suspeitas e editadas" OffContent="Todas as páginas" />
+                <ui:FAProgressRing DockPanel.Dock="Top" IsIndeterminate="True" Width="32" Height="32" IsVisible="{Binding IsLoading}" />
+                <ListBox ItemsSource="{Binding Visible}" SelectedItem="{Binding Selected}" Background="Transparent">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CutPageItem">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Detail}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+            <Border Grid.Row="1" Grid.Column="1" Padding="8" CornerRadius="8" Background="#1f1f1f">
+                <views:CutCanvas Source="{Binding Source}" Cuts="{Binding Cuts}" />
+            </Border>
+            <Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,12,0,0">
+                <Button Command="{Binding PreviousCommand}" ToolTip.Tip="Página anterior da lista">
+                    <ui:FASymbolIcon Symbol="Back" />
+                </Button>
+                <TextBlock Grid.Column="1" Text="{Binding PageTitle}" VerticalAlignment="Center" Margin="12,0" TextTrimming="CharacterEllipsis" />
+                <Button Grid.Column="2" Command="{Binding NextCommand}" ToolTip.Tip="Próxima página da lista" Margin="0,0,12,0">
+                    <ui:FASymbolIcon Symbol="Forward" />
+                </Button>
+                <Button Grid.Column="3" Content="Voltar à detecção" Command="{Binding ResetPageCommand}" Margin="0,0,8,0"
+                        ToolTip.Tip="Apaga as linhas manuais desta página" />
+                <Button Grid.Column="4" Classes="accent" Content="Fechar editor" Command="{Binding CloseCommand}" />
+            </Grid>
+        </Grid>
+        </Panel>
 
         <ScrollViewer Grid.Row="1" Grid.Column="1" Margin="20,0,0,0">
             <StackPanel Spacing="18">
@@ -143,6 +192,8 @@
                     <Slider Minimum="0" Maximum="40" Value="{Binding Overlap}" TickFrequency="1" IsSnapToTickEnabled="True" />
                     <ToggleSwitch IsChecked="{Binding PageBeforeBands}" Margin="0,4,0,0"
                                   OnContent="Mostrar a página inteira antes dos pedaços" OffContent="Só os pedaços" />
+                    <Button Content="Editar linhas de corte" Command="{Binding OpenCutEditorCommand}" Margin="0,8,0,0"
+                            ToolTip.Tip="Abre as páginas suspeitas deste capítulo. Clicar no preview abre a página da tela mostrada." />
                 </StackPanel>
 
                 <StackPanel Spacing="6">
