@@ -156,6 +156,42 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     [ObservableProperty]
     private bool _pageBeforeBands;
 
+    [ObservableProperty]
+    private bool _avoidBubbles;
+
+    [ObservableProperty]
+    private string? _modelStatus;
+
+    public string BubbleModelSize => $"{NovelShelf.Vision.TextModel.Size / 1_000_000.0:0} MB";
+
+    partial void OnAvoidBubblesChanged(bool value)
+    {
+        if (value && !_loading && !_services.TextModel.IsInstalled)
+            _ = InstallBubbleModelAsync();
+    }
+
+    private async Task InstallBubbleModelAsync()
+    {
+        try
+        {
+            ModelStatus = "Baixando o modelo de balões...";
+            await _services.TextModel.InstallAsync(new Progress<NovelShelf.Vision.ModelProgress>(p =>
+                ModelStatus = $"Baixando o modelo de balões: {p.Done / 1_000_000.0:0.0} de {p.Total / 1_000_000.0:0.0} MB"));
+            ModelStatus = null;
+            HasPendingChanges = true;
+        }
+        catch (Exception e) when (e is HttpRequestException or IOException or InvalidOperationException or TaskCanceledException)
+        {
+            ModelStatus = null;
+            AvoidBubbles = false;
+            MessageIsError = true;
+            Message = $"Não deu para baixar o modelo de balões: {e.Message}";
+        }
+    }
+
+    private ComicPageOptions PreviewOptions() =>
+        new(_services.KindleProfile, RightToLeft, Layout, TextDetector: _services.TextModel.Detector);
+
     public Func<string, string, Task<bool>>? Confirm { get; set; }
 
     public int LastPageIndex => Math.Max(0, PageCount - 1);
@@ -189,6 +225,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
         TallBand = TallBand / 100,
         MergeBands = MergeBands / 100,
         PageBeforeBands = PageBeforeBands,
+        AvoidBubbles = AvoidBubbles,
     }.Normalized();
 
     private void Load(ComicLayout layout)
@@ -208,6 +245,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
         TallBand = Math.Round(layout.TallBand * 100);
         MergeBands = Math.Round(layout.MergeBands * 100);
         PageBeforeBands = layout.PageBeforeBands;
+        AvoidBubbles = layout.AvoidBubbles;
     }
 
     protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
@@ -236,6 +274,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
             case nameof(TallBand):
             case nameof(MergeBands):
             case nameof(PageBeforeBands):
+            case nameof(AvoidBubbles):
                 Message = null;
                 HasPendingChanges = true;
                 break;
@@ -270,7 +309,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
             var pages = await SourcePagesAsync(chapter, ct);
             DetectedStrip = ComicPageProcessor.IsWebtoon(pages);
             OnPropertyChanged(nameof(UsesStrip));
-            var options = new ComicPageOptions(_services.KindleProfile, RightToLeft, Layout);
+            var options = PreviewOptions();
             var byScreen = options.EffectiveLayout.UsesPageCuts;
             var cuts = byScreen ? _services.Library.GetPageCuts(_comic.Id, chapter.Key) : null;
             var byPage = await Task.Run(() => byScreen
@@ -390,7 +429,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     {
         var chapter = Chapter!;
         var pages = await SourcePagesAsync(chapter, CancellationToken.None);
-        var options = new ComicPageOptions(_services.KindleProfile, RightToLeft, Layout);
+        var options = PreviewOptions();
         int? start = PageIndex < _screenPages.Count ? _screenPages[PageIndex] : null;
         var editor = new CutEditorViewModel(_services.Library, _comic.Id, chapter, pages, options, CloseCutEditor);
         CutEditor = editor;

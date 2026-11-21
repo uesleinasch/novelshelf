@@ -101,6 +101,14 @@ public sealed partial class CutEditorViewModel : ViewModelBase
 
     public IReadOnlyList<PanelFrame>? ShownPanels => ShowPanels ? Panels : null;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShownBubbles))]
+    private IReadOnlyList<PanelFrame>? _bubbles;
+
+    public IReadOnlyList<PanelFrame>? ShownBubbles => ShowPanels ? Bubbles : null;
+
+    partial void OnShowPanelsChanged(bool value) => OnPropertyChanged(nameof(ShownBubbles));
+
     public string PageTitle => Selected is { } item ? $"{item.Label} de {_pages.Count} — {item.Detail}" : "";
 
     public async Task LoadAsync(int? startPage)
@@ -147,6 +155,7 @@ public sealed partial class CutEditorViewModel : ViewModelBase
         try
         {
             Panels = null;
+            Bubbles = null;
             if (value is null)
             {
                 Source = null;
@@ -182,6 +191,11 @@ public sealed partial class CutEditorViewModel : ViewModelBase
         var panels = await Task.Run(() => ComicPageProcessor.DetectPanels(page, _options));
         if (ReferenceEquals(Selected, item))
             Panels = panels;
+        if (_options.Bubbles is null)
+            return;
+        var bubbles = await Task.Run(() => ComicPageProcessor.DetectTextRegions(page, _options));
+        if (ReferenceEquals(Selected, item))
+            Bubbles = bubbles;
     }
 
     private async Task ReplanAsync(CutPageItem item, PageCuts? cuts)

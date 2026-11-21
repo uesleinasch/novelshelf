@@ -21,6 +21,10 @@ public sealed class CutCanvas : Control
     public static readonly StyledProperty<IReadOnlyList<PanelFrame>?> PanelsProperty =
         AvaloniaProperty.Register<CutCanvas, IReadOnlyList<PanelFrame>?>(nameof(Panels));
 
+    public static readonly StyledProperty<IReadOnlyList<PanelFrame>?> BubblesProperty =
+        AvaloniaProperty.Register<CutCanvas, IReadOnlyList<PanelFrame>?>(nameof(Bubbles));
+
+    private static readonly IPen BubblePen = new Pen(new SolidColorBrush(Color.FromArgb(0xd0, 0xea, 0x58, 0x0c)), 2, new DashStyle([3, 2], 0));
     private static readonly IPen PanelPen = new Pen(new SolidColorBrush(Color.FromArgb(0xc0, 0x16, 0xa3, 0x4a)), 2);
     private static readonly IBrush PanelLabel = new SolidColorBrush(Color.FromRgb(0x16, 0xa3, 0x4a));
     private static readonly IPen RowPen = new Pen(new SolidColorBrush(Color.FromRgb(0xe1, 0x1d, 0x48)), 2);
@@ -34,7 +38,7 @@ public sealed class CutCanvas : Control
 
     static CutCanvas()
     {
-        AffectsRender<CutCanvas>(SourceProperty, CutsProperty, PanelsProperty);
+        AffectsRender<CutCanvas>(SourceProperty, CutsProperty, PanelsProperty, BubblesProperty);
         FocusableProperty.OverrideDefaultValue<CutCanvas>(true);
     }
 
@@ -54,6 +58,12 @@ public sealed class CutCanvas : Control
     {
         get => GetValue(PanelsProperty);
         set => SetValue(PanelsProperty, value);
+    }
+
+    public IReadOnlyList<PanelFrame>? Bubbles
+    {
+        get => GetValue(BubblesProperty);
+        set => SetValue(BubblesProperty, value);
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -94,6 +104,10 @@ public sealed class CutCanvas : Control
             return;
         context.DrawImage(Source, new Rect(Source.Size), area);
         DrawPanels(context, area);
+        foreach (var bubble in Bubbles ?? [])
+            context.DrawRectangle(null, BubblePen, new Rect(
+                new Point(area.Left + bubble.Left * area.Width, area.Top + bubble.Top * area.Height),
+                new Point(area.Left + bubble.Right * area.Width, area.Top + bubble.Bottom * area.Height)));
 
         for (var i = 0; i < _rows.Count; i++)
         {

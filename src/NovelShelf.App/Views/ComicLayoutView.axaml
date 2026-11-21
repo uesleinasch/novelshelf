@@ -69,7 +69,7 @@
                 <TextBlock DockPanel.Dock="Top" Text="{Binding Summary}" FontSize="12" Opacity="0.8" TextWrapping="Wrap" Margin="0,0,0,6" />
                 <ToggleSwitch DockPanel.Dock="Top" IsChecked="{Binding OnlySuspect}" OnContent="Só suspeitas e editadas" OffContent="Todas as páginas" />
                 <ToggleSwitch DockPanel.Dock="Top" IsChecked="{Binding ShowPanels}" OnContent="Mostrar quadros detectados" OffContent="Esconder quadros"
-                              ToolTip.Tip="Contorno verde em cada quadro achado, numerado na ordem de leitura" />
+                              ToolTip.Tip="Contorno verde em cada quadro achado, numerado na ordem de leitura; tracejado laranja nos balões achados pela IA" />
                 <ui:FAProgressRing DockPanel.Dock="Top" IsIndeterminate="True" Width="32" Height="32" IsVisible="{Binding IsLoading}" />
                 <ListBox ItemsSource="{Binding Visible}" SelectedItem="{Binding Selected}" Background="Transparent">
                     <ListBox.ItemTemplate>
@@ -83,7 +83,7 @@
                 </ListBox>
             </DockPanel>
             <Border Grid.Row="1" Grid.Column="1" Padding="8" CornerRadius="8" Background="#1f1f1f">
-                <views:CutCanvas Source="{Binding Source}" Cuts="{Binding Cuts}" Panels="{Binding ShownPanels}" />
+                <views:CutCanvas Source="{Binding Source}" Cuts="{Binding Cuts}" Panels="{Binding ShownPanels}" Bubbles="{Binding ShownBubbles}" />
             </Border>
             <Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,12,0,0">
                 <Button Command="{Binding PreviousCommand}" ToolTip.Tip="Página anterior da lista">
@@ -204,6 +204,12 @@
                 <StackPanel Spacing="6" IsVisible="{Binding ShowCutOptions}">
                     <ToggleSwitch IsChecked="{Binding PageBeforeBands}"
                                   OnContent="Mostrar a página inteira antes dos pedaços" OffContent="Só os pedaços" />
+                    <ToggleSwitch IsChecked="{Binding AvoidBubbles}"
+                                  OnContent="Não cortar balões de fala (IA local)" OffContent="Cortar sem olhar os balões" />
+                    <TextBlock FontSize="12" Opacity="0.7" TextWrapping="Wrap"
+                               Text="{Binding BubbleModelSize, StringFormat='Um modelo de IA acha os balões e o texto para o corte desviar deles. Roda no seu computador; na primeira vez baixa {0} (licença Apache-2.0).'}" />
+                    <TextBlock Text="{Binding ModelStatus}" FontSize="12" TextWrapping="Wrap"
+                               IsVisible="{Binding ModelStatus, Converter={x:Static ObjectConverters.IsNotNull}}" />
                     <Button Content="Editar linhas de corte" Command="{Binding OpenCutEditorCommand}"
                             ToolTip.Tip="Abre as páginas suspeitas deste capítulo. Clicar no preview abre a página da tela mostrada." />
                 </StackPanel>
