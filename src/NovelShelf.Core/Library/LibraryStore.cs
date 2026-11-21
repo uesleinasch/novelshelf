@@ -150,6 +150,16 @@ public sealed class LibraryStore
                 COMMIT;
                 """);
         }
+
+        if (ScalarLong(db, "PRAGMA user_version") < 7)
+        {
+            Execute(db, """
+                BEGIN;
+                ALTER TABLE novels ADD COLUMN resend_ranges TEXT;
+                PRAGMA user_version = 7;
+                COMMIT;
+                """);
+        }
     }
 
     public ComicLayout GetComicLayout(long novelId)
@@ -439,8 +449,29 @@ public sealed class LibraryStore
     public void MarkSent(long novelId, int chapterCount)
     {
         using var db = Open();
-        Execute(db, "UPDATE novels SET sent_chapter_count = $count, sent_at = $now, needs_resend = 0, sent_volume_size = volume_size WHERE id = $novel",
-            ("$count", chapterCount), ("$now", Stamp(_time.GetUtcNow())), ("$novel", novelId));
+        Execute(db, """
+            UPDATE novels SET sent_chapter_count = $count, sent_at = $now, needs_resend = 0, sent_volume_size = volume_size,
+                resend_ranges = NULL
+            WHERE id = $novel
+            """, ("$count", chapterCount), ("$now", Stamp(_time.GetUtcNow())), ("$novel", novelId));
+    }
+
+    public void MarkResendAll(long novelId)
+    {
+        using var db = Open();
+        Execute(db, "UPDATE novels SET needs_resend = 1 WHERE id = $novel AND sent_at IS NOT NULL", ("$novel", novelId));
+    }
+
+    public void MarkResend(long novelId, IEnumerable<ChapterRange> ranges)
+    {
+        using var db = Open();
+        using var current = Command(db, "SELECT resend_ranges FROM novels WHERE id = $novel AND sent_at IS NOT NULL", [("$novel", novelId)]);
+        var value = current.ExecuteScalar();
+        if (value is null)
+            return;
+        var merged = ChapterRange.Merge(ChapterRange.Parse(value as string).Concat(ranges));
+        Execute(db, "UPDATE novels SET resend_ranges = $ranges WHERE id = $novel",
+            ("$ranges", ChapterRange.Format(merged)), ("$novel", novelId));
     }
 
     private static List<LibraryNovel> QueryNovels(SqliteConnection db, string tail, params (string, object?)[] args)
@@ -452,7 +483,7 @@ public sealed class LibraryStore
                      + (SELECT COUNT(*) FROM comic_chapters cc WHERE cc.novel_id = n.id),
                    n.sent_chapter_count, n.added_at, n.updated_at, n.sent_at,
                    n.kind, n.remote_key, n.source_name, n.right_to_left, n.needs_resend, n.caught_up,
-                   n.volume_size, n.sent_volume_size
+                   n.volume_size, n.sent_volume_size, n.resend_ranges
             FROM novels n
             {tail}
             """, args);
@@ -486,7 +517,8 @@ public sealed class LibraryStore
                 NeedsResend: r.GetInt64(22) != 0,
                 CaughtUp: r.GetInt64(23) != 0,
                 VolumeSize: r.GetInt32(24),
-                SentVolumeSize: r.IsDBNull(25) ? null : r.GetInt32(25)));
+                SentVolumeSize: r.IsDBNull(25) ? null : r.GetInt32(25),
+                ResendRanges: ChapterRange.Parse(NullableString(r, 26))));
         }
         return list;
     }

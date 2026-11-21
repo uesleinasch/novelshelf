@@ -31,7 +31,7 @@ public sealed record LibraryFilter(
     public static KindleState KindleStateOf(LibraryNovel novel) =>
         novel.SentAt is null
             ? KindleState.NeverSent
-            : novel.DownloadedChapters > novel.SentChapterCount || novel.NeedsResend || novel.VolumeLayoutChanged
+            : novel.DownloadedChapters > novel.SentChapterCount || novel.NeedsResend || novel.VolumeLayoutChanged || novel.ResendMarked
                 ? KindleState.Pending
                 : KindleState.UpToDate;
 

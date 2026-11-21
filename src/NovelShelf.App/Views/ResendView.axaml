@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="using:FluentAvalonia.UI.Controls"
+             xmlns:vm="using:NovelShelf.App.ViewModels"
+             x:Class="NovelShelf.App.Views.ResendView"
+             x:DataType="vm:ResendViewModel"
+             MinWidth="380">
+    <StackPanel Spacing="12">
+        <TextBlock Text="{Binding Work.Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+        <TextBlock TextWrapping="Wrap" Opacity="0.8"
+                   Text="O que você marcar vai de novo no próximo envio. O livro no Kindle é substituído no lugar e a posição de leitura fica." />
+
+        <RadioButton GroupName="scope" Content="A obra inteira" IsChecked="{Binding Everything}" />
+
+        <RadioButton GroupName="scope" Content="Um pacote de capítulos" IsChecked="{Binding ByChapters}" />
+        <StackPanel Spacing="6" Margin="28,0,0,0" IsVisible="{Binding ByChapters}">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <TextBlock Text="Do capítulo" VerticalAlignment="Center" />
+                <ui:FANumberBox Value="{Binding FromChapter}" Minimum="1" Maximum="{Binding ChapterCount}"
+                                SpinButtonPlacementMode="Compact" Width="110" />
+                <TextBlock Text="ao" VerticalAlignment="Center" />
+                <ui:FANumberBox Value="{Binding ToChapter}" Minimum="1" Maximum="{Binding ChapterCount}"
+                                SpinButtonPlacementMode="Compact" Width="110" />
+            </StackPanel>
+            <TextBlock Text="{Binding ChaptersHint}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+        </StackPanel>
+
+        <RadioButton GroupName="scope" Content="Volumes" IsChecked="{Binding ByVolumes}" IsVisible="{Binding HasVolumes}" />
+        <ScrollViewer MaxHeight="220" Margin="28,0,0,0" IsVisible="{Binding ByVolumes}">
+            <ItemsControl ItemsSource="{Binding VolumeOptions}">
+                <ItemsControl.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ResendVolume">
+                        <CheckBox Content="{Binding Label}" IsChecked="{Binding IsChecked}" />
+                    </DataTemplate>
+                </ItemsControl.ItemTemplate>
+            </ItemsControl>
+        </ScrollViewer>
+    </StackPanel>
+</UserControl>
