@@ -424,6 +424,52 @@ public sealed class LandscapeTests
         Assert.Single(ComicPageProcessor.ProcessPage(page, Options(PanelMode)));
     }
 
+    private sealed class FixedBubbles(params PanelBox[] boxes) : ITextRegionDetector
+    {
+        public string Id => "fixed";
+
+        public IReadOnlyList<TextRegion> Detect(byte[] pixels, int width, int height, int channels) =>
+            boxes.Select(b => new TextRegion(b, TextRegionKind.Bubble, 0.9f)).ToList();
+    }
+
+    [Fact]
+    public void Landscape_cut_moves_off_a_speech_bubble()
+    {
+        var page = Tiers(800, (50, 400), (450, 800));
+        var bubble = new FixedBubbles(new PanelBox(500, 300, 700, 430));
+        var guarded = Options(Landscape with { AvoidBubbles = true }) with { TextDetector = bubble };
+
+        var plain = ComicPageProcessor.PlanLandscape(page, Options(Landscape) with { TextDetector = bubble })!;
+        var plan = ComicPageProcessor.PlanLandscape(page, guarded)!;
+
+        Assert.InRange(plain.Screens[0].Bottom, 400, 429);
+        Assert.True(plan.Screens[0].Bottom >= 430);
+        Assert.Equal(plain.Screens.Count, plan.Screens.Count);
+    }
+
+    [Fact]
+    public void Panels_grow_to_keep_a_bubble_that_leaks_out()
+    {
+        var bubble = new FixedBubbles(new PanelBox(370, 100, 440, 160));
+        var options = Options(PanelMode with { AvoidBubbles = true }) with { TextDetector = bubble };
+
+        var plan = ComicPageProcessor.PlanPanels(Grid(), options)!;
+
+        Assert.True(plan.Panels[0].Right >= 440);
+        Assert.True(plan.Panels[1].Left <= 370);
+        Assert.Equal(4, plan.Panels.Count);
+    }
+
+    [Fact]
+    public void Bubble_detection_only_changes_the_fingerprint_when_used()
+    {
+        var detector = new FixedBubbles();
+
+        Assert.Equal(Options(Landscape).Fingerprint, (Options(Landscape) with { TextDetector = detector }).Fingerprint);
+        Assert.NotEqual(Options(Landscape).Fingerprint,
+            (Options(Landscape with { AvoidBubbles = true }) with { TextDetector = detector }).Fingerprint);
+    }
+
     private sealed class CountingStore : IConvertedPageStore
     {
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (byte[] Key, List<byte[]> Screens)> _entries = [];

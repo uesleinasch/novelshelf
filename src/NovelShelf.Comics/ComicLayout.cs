@@ -53,6 +53,7 @@ public sealed record ComicLayout
     public double TallBand { get; init; } = 1.3;
     public double MergeBands { get; init; } = 1.0;
     public bool PageBeforeBands { get; init; }
+    public bool AvoidBubbles { get; init; }
 
     [JsonIgnore]
     public bool UsesPageCuts => Mode is ComicReadingMode.Landscape or ComicReadingMode.Panels;
