@@ -14,6 +14,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     private readonly LibraryNovel _comic;
     private readonly Action _close;
     private ComicLayout _saved;
+    private bool _savedRightToLeft;
     private readonly Dictionary<string, IReadOnlyList<byte[]>> _sources = [];
     private IReadOnlyList<byte[]> _rendered = [];
     private IReadOnlyList<int> _screenPages = [];
@@ -29,9 +30,10 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
             Chapters.Add(chapter);
         _saved = services.Library.GetComicLayout(comic.Id);
         Load(_saved);
-        _rightToLeft = comic.RightToLeft;
+        _rightToLeft = _savedRightToLeft = comic.RightToLeft;
         _loading = false;
         _chapter = Chapters.FirstOrDefault();
+        RefreshCacheSize();
         ScheduleRender();
     }
 
@@ -48,6 +50,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
                 return;
             _services.Settings.KindleProfile = value.Id;
             _services.Settings.Save();
+            ClearCache();
             OnPropertyChanged();
             OnPropertyChanged(nameof(ProfileName));
             HasPendingChanges = true;
@@ -337,11 +340,44 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
             return;
         if (HasPendingChanges)
             ScheduleRender();
+        if (layout != _saved || RightToLeft != _savedRightToLeft)
+            ClearCache();
         _services.Library.SetComicLayout(_comic.Id, layout);
         _saved = layout;
         _services.Library.SetRightToLeft(_comic.Id, RightToLeft);
+        _savedRightToLeft = RightToLeft;
         MessageIsError = false;
         Message = "Ajustes salvos para esta obra. Converter e Enviar já usam o novo enquadramento.";
+    }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ClearCacheCommand))]
+    private long _cacheBytes;
+
+    public string CacheSize => CacheBytes switch
+    {
+        0 => "Cache vazio. A próxima conversão processa todas as páginas.",
+        < 1_000_000 => $"Cache: {CacheBytes / 1000.0:0} KB de páginas já convertidas.",
+        _ => $"Cache: {CacheBytes / 1_000_000.0:0.0} MB de páginas já convertidas.",
+    };
+
+    partial void OnCacheBytesChanged(long value) => OnPropertyChanged(nameof(CacheSize));
+
+    private void RefreshCacheSize() => CacheBytes = _services.ComicPageCache.SizeOf(_comic.Id);
+
+    private bool HasCache() => CacheBytes > 0;
+
+    [RelayCommand(CanExecute = nameof(HasCache))]
+    private void ClearCache()
+    {
+        try
+        {
+            _services.ComicPageCache.Clear(_comic.Id);
+        }
+        catch (IOException)
+        {
+        }
+        RefreshCacheSize();
     }
 
     private bool CanEditCuts() => ShowLandscapeOptions && Chapter is not null && !IsRendering && CutEditor is null;

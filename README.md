@@ -109,7 +109,7 @@ Dentro dela:
 | `library.db` | a biblioteca |
 | `books/` | EPUB e AZW3 gerados |
 | `covers/` | capas |
-| `comics/` | páginas originais dos quadrinhos baixados |
+| `comics/` | páginas originais dos quadrinhos baixados e, em `comics/<obra>/cache/`, as páginas já convertidas |
 | `suwayomi/` | Java, servidor de mangás e as extensões instaladas |
 | `settings.json` | modelo do Kindle e preferências |
 
@@ -169,6 +169,7 @@ Os sites de quadrinhos vêm das **extensões do Mihon** (o leitor de mangá do A
   O ajuste fica salvo para aquela obra, e Converter e Enviar passam a usá-lo. Trocar o formato de uma obra já enviada muda o número de telas, e o marcador de leitura vai parar em outro ponto; o app avisa antes de salvar.
 - **Faixas deitadas** (para HQ com letra pequena no Kindle de 6"): cada faixa de quadros vira uma tela para ler com o Kindle deitado, então a letra fica maior. O livro continua em pé, porque a imagem já vai girada; você escolhe o lado do giro. O corte é nos espaços lisos (brancos ou pretos) entre as faixas. Faixas baixas vizinhas dividem uma tela, e faixa alta demais vai em dois pedaços com sobra. Os dois limites são ajustáveis. Página sem espaço claro entre quadros vai em pedaços iguais com sobra, e página de um quadro só (splash) vai inteira. Dá para mostrar a página inteira antes dos pedaços. O app nunca escolhe esse modo sozinho.
 - **Linhas de corte manuais:** no modo faixas deitadas, **Editar linhas de corte** (ou um clique no preview) abre o editor da página. A lista começa só com as páginas suspeitas: sem calha clara, com pedaço minúsculo ou com pedaço gigante. Arraste para mover uma linha, clique duplo para criar uma linha horizontal (com Shift, uma vertical), Delete para apagar. ← → ou PgUp PgDn trocam de página. Cada faixa entre duas linhas horizontais vira uma tela. As linhas verticais ficam guardadas para o modo quadro a quadro. O ajuste é salvo na hora, por página e em fração da página, então vale para qualquer modelo de Kindle e continua depois de reconverter ou baixar de novo. **Voltar à detecção** apaga o ajuste da página. Remover a obra apaga as linhas junto.
+- **Cache de páginas convertidas:** Converter e Enviar guardam cada página já ajustada na pasta da obra e reaproveitam na próxima vez, então capítulo novo só converte o que é novo. Editar as linhas de corte de uma página reconverte só aquela página. Salvar ajustes diferentes ou trocar o modelo do Kindle limpa o cache da obra. A tela **Ajustar corte** mostra o tamanho do cache e tem o botão **Limpar cache**. Remover a obra apaga o cache junto.
 - **Formato:** o livro é um AZW3 de layout fixo (uma imagem por página, sumário por capítulo). Ele usa o mesmo ASIN e o mesmo nome de arquivo (`hq-<obra>.azw3`), então reenviar substitui o livro.
 
 ## Kindle: detalhes importantes
@@ -218,6 +219,7 @@ tests/
 | `ComicDownloader` | Baixa as páginas dos próximos capítulos para `comics/`. |
 | `ComicPageProcessor` | Corta margens, divide páginas duplas, fatia webtoons, corta faixas deitadas e ajusta ao tamanho da tela. |
 | `ComicBookBuilder` / `ComicExporter` | Montam o AZW3 de layout fixo com uma imagem por página. |
+| `ComicPageCache` | Guarda as páginas já convertidas de cada obra, separadas por ajuste e modelo do Kindle. |
 
 ### Fonte Novel Mania
 
@@ -300,7 +302,6 @@ NOVELSHELF_SUWAYOMI_ROOT=/tmp/suwayomi NOVELSHELF_DUMP_DIR=/tmp/azw3 dotnet test
 
 - [ ] MTP no Windows (WPD)
 - [ ] Mais sites de novels
-- [ ] Guardar as páginas já convertidas para acelerar reenvios
 - [ ] Login e Cloudflare nas fontes de quadrinhos
 - [ ] Compressão PalmDoc no AZW3
 

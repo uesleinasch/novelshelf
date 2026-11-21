@@ -38,6 +38,7 @@ public sealed class AppServices
         Manga = new MangaBackend(installer, server, client);
         ComicDownloader = new ComicDownloader(Library, client, paths);
         ComicExporter = new ComicExporter(Library, paths, ComicDownloader);
+        ComicPageCache = new ComicPageCache(paths);
         Covers = new CoverLoader(paths);
         Downloads = new DownloadService(this);
         Delivery = new KindleDelivery(this);
@@ -57,6 +58,7 @@ public sealed class AppServices
     public MangaBackend Manga { get; }
     public ComicDownloader ComicDownloader { get; }
     public ComicExporter ComicExporter { get; }
+    public ComicPageCache ComicPageCache { get; }
     public CoverLoader Covers { get; }
     public DownloadService Downloads { get; }
     public KindleDelivery Delivery { get; }

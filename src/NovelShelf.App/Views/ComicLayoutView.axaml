@@ -209,6 +209,14 @@
                                FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
                 </StackPanel>
 
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Páginas convertidas" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding CacheSize}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                    <TextBlock Text="Converter e Enviar reaproveitam as páginas que já foram convertidas e só processam o que é novo. Mudar os ajustes ou o modelo do Kindle limpa o cache."
+                               FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                    <Button Content="Limpar cache" Command="{Binding ClearCacheCommand}" />
+                </StackPanel>
+
                 <ui:FAInfoBar Title="Ajustes" Message="{Binding Message}" IsClosable="False"
                               IsOpen="{Binding Message, Converter={x:Static ObjectConverters.IsNotNull}}" />
 
