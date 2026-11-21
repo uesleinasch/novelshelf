@@ -1,4 +1,6 @@
 using System.Net.Http.Json;
+using System.Net.WebSockets;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using NovelShelf.Core.Comics;
 
@@ -21,6 +23,29 @@ public sealed record SuwayomiExtension(
     bool IsObsolete,
     ContentWarning ContentWarning,
     Uri? IconUrl);
+
+public enum SourcePreferenceKind
+{
+    Text,
+    Switch,
+    CheckBox,
+    List,
+    MultiList,
+}
+
+public sealed record SourceChoice(string Label, string Value);
+
+public sealed record SourcePreference(
+    int Position,
+    SourcePreferenceKind Kind,
+    string? Key,
+    string Title,
+    string? Summary,
+    bool Enabled,
+    string? Text,
+    bool IsOn,
+    IReadOnlyList<SourceChoice> Choices,
+    IReadOnlyList<string> Selected);
 
 public sealed class SuwayomiClient(HttpClient http, Func<Uri?> baseUrl) : IComicProvider
 {
@@ -66,7 +91,7 @@ public sealed class SuwayomiClient(HttpClient http, Func<Uri?> baseUrl) : IComic
 
     public async Task<IReadOnlyList<ComicSourceInfo>> GetSourcesAsync(CancellationToken ct = default)
     {
-        var data = await GraphAsync("{ sources { nodes { id name displayName lang contentWarning supportsLatest iconUrl } } }", null, ct);
+        var data = await GraphAsync("{ sources { nodes { id name displayName lang contentWarning supportsLatest iconUrl homeUrl isConfigurable } } }", null, ct);
         return data["sources"]!["nodes"]!.AsArray()
             .Select(n => n!)
             .Where(n => (string?)n["id"] != "0")
@@ -76,9 +101,59 @@ public sealed class SuwayomiClient(HttpClient http, Func<Uri?> baseUrl) : IComic
                 (string?)n["lang"] ?? "",
                 ParseWarning((string?)n["contentWarning"]) == ContentWarning.Nsfw,
                 (bool?)n["supportsLatest"] ?? false,
-                Absolute((string?)n["iconUrl"])))
+                Absolute((string?)n["iconUrl"]),
+                Uri.TryCreate((string?)n["homeUrl"], UriKind.Absolute, out var home) ? home : null,
+                (bool?)n["isConfigurable"] ?? false))
             .OrderBy(s => s.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
+    }
+
+    public async Task<IReadOnlyList<SourcePreference>> GetSourcePreferencesAsync(string sourceId, CancellationToken ct = default)
+    {
+        var data = await GraphAsync("""
+            query($id: LongString!) {
+              source(id: $id) {
+                preferences {
+                  __typename
+                  ... on EditTextPreference { key title summary visible enabled text: currentValue }
+                  ... on SwitchPreference { key title summary visible enabled on: currentValue }
+                  ... on CheckBoxPreference { key title summary visible enabled on: currentValue }
+                  ... on ListPreference { key title summary visible enabled choice: currentValue entries entryValues }
+                  ... on MultiSelectListPreference { key title summary visible enabled choices: currentValue entries entryValues }
+                }
+              }
+            }
+            """, new { id = sourceId }, ct);
+        return data["source"]!["preferences"]!.AsArray()
+            .Select((n, position) => ParsePreference(n!, position))
+            .OfType<SourcePreference>()
+            .ToList();
+    }
+
+    public async Task SetSourcePreferenceAsync(string sourceId, SourcePreference preference, CancellationToken ct = default)
+    {
+        var change = new JsonObject { ["position"] = preference.Position };
+        switch (preference.Kind)
+        {
+            case SourcePreferenceKind.Text:
+                change["editTextState"] = preference.Text ?? "";
+                break;
+            case SourcePreferenceKind.Switch:
+                change["switchState"] = preference.IsOn;
+                break;
+            case SourcePreferenceKind.CheckBox:
+                change["checkBoxState"] = preference.IsOn;
+                break;
+            case SourcePreferenceKind.List:
+                change["listState"] = preference.Selected.FirstOrDefault() ?? "";
+                break;
+            case SourcePreferenceKind.MultiList:
+                change["multiSelectState"] = new JsonArray(preference.Selected.Select(v => (JsonNode?)JsonValue.Create(v)).ToArray());
+                break;
+        }
+        await GraphAsync(
+            "mutation($source: LongString!, $change: SourcePreferenceChangeInput!) { updateSourcePreference(input: { source: $source, change: $change }) { clientMutationId } }",
+            new JsonObject { ["source"] = sourceId, ["change"] = change }, ct);
     }
 
     public async Task<ComicBrowsePage> BrowseAsync(string sourceId, ComicListing listing, string? query, int page, CancellationToken ct = default)
@@ -173,6 +248,38 @@ public sealed class SuwayomiClient(HttpClient http, Func<Uri?> baseUrl) : IComic
         return await response.Content.ReadAsByteArrayAsync(ct);
     }
 
+    public async Task<Uri> PrepareWebViewAsync(Uri target, CancellationToken ct = default)
+    {
+        await GraphAsync("mutation { setSettings(input: { settings: { kcefEnabled: true } }) { settings { kcefEnabled } } }", null, ct);
+        while (!await WebViewAnswersAsync(target, ct))
+            await Task.Delay(WebViewRetryDelay, ct);
+        return new Uri(Base, "api/v1/webview#" + Uri.EscapeDataString(target.AbsoluteUri));
+    }
+
+    internal TimeSpan WebViewRetryDelay { get; init; } = TimeSpan.FromSeconds(3);
+    internal TimeSpan WebViewProbeTimeout { get; init; } = TimeSpan.FromSeconds(20);
+
+    private async Task<bool> WebViewAnswersAsync(Uri target, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(WebViewProbeTimeout);
+        using var socket = new ClientWebSocket();
+        try
+        {
+            var endpoint = new UriBuilder(new Uri(Base, "api/v1/webview")) { Scheme = "ws" }.Uri;
+            await socket.ConnectAsync(endpoint, timeout.Token);
+            var load = JsonSerializer.SerializeToUtf8Bytes(new { type = "loadUrl", url = target.AbsoluteUri, width = 1024, height = 768 });
+            await socket.SendAsync(load, WebSocketMessageType.Text, true, timeout.Token);
+            var buffer = new byte[4096];
+            var answer = await socket.ReceiveAsync(buffer, timeout.Token);
+            return answer.MessageType != WebSocketMessageType.Close;
+        }
+        catch (Exception e) when (e is WebSocketException or OperationCanceledException && !ct.IsCancellationRequested)
+        {
+            return false;
+        }
+    }
+
     public Uri? Absolute(string? path) =>
         string.IsNullOrEmpty(path) ? null
         : Uri.TryCreate(path, UriKind.Absolute, out var absolute) && absolute.Scheme.StartsWith("http", StringComparison.Ordinal) ? absolute
@@ -208,6 +315,44 @@ public sealed class SuwayomiClient(HttpClient http, Func<Uri?> baseUrl) : IComic
         (bool?)n["isObsolete"] ?? false,
         ParseWarning((string?)n["contentWarning"]),
         Absolute((string?)n["iconUrl"]));
+
+    private static SourcePreference? ParsePreference(JsonNode n, int position)
+    {
+        if ((bool?)n["visible"] == false)
+            return null;
+        SourcePreferenceKind? kind = (string?)n["__typename"] switch
+        {
+            "EditTextPreference" => SourcePreferenceKind.Text,
+            "SwitchPreference" => SourcePreferenceKind.Switch,
+            "CheckBoxPreference" => SourcePreferenceKind.CheckBox,
+            "ListPreference" => SourcePreferenceKind.List,
+            "MultiSelectListPreference" => SourcePreferenceKind.MultiList,
+            _ => null,
+        };
+        if (kind is not { } known)
+            return null;
+        var labels = n["entries"]?.AsArray().Select(e => (string?)e ?? "") ?? [];
+        var values = n["entryValues"]?.AsArray().Select(e => (string?)e ?? "") ?? [];
+        IReadOnlyList<string> selected = known switch
+        {
+            SourcePreferenceKind.List when (string?)n["choice"] is { } choice => [choice],
+            SourcePreferenceKind.MultiList => n["choices"]?.AsArray().Select(c => (string)c!).ToList() ?? [],
+            _ => [],
+        };
+        var key = (string?)n["key"];
+        var summary = (string?)n["summary"];
+        return new SourcePreference(
+            position,
+            known,
+            key,
+            (string?)n["title"] ?? key ?? "",
+            string.IsNullOrWhiteSpace(summary) ? null : summary,
+            (bool?)n["enabled"] ?? true,
+            (string?)n["text"],
+            (bool?)n["on"] ?? false,
+            labels.Zip(values, (label, value) => new SourceChoice(label, value)).ToList(),
+            selected);
+    }
 
     private static ContentWarning ParseWarning(string? value) => value switch
     {

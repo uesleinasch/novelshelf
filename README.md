@@ -141,10 +141,29 @@ Os sites de quadrinhos vêm das **extensões do Mihon** (o leitor de mangá do A
    3. Use **Enviar** para mandar ao Kindle.
 6. Em mangá japonês, ligue **Leitura da direita para a esquerda**.
 
+### Fontes que pedem login
+
+Alguns sites só funcionam com conta. A fonte então avisa algo como "Faça login no WebView ou insira email e senha nas configurações".
+
+**Configurar fonte** (quando a extensão aceita a conta, como a KuroMangas):
+
+1. Abra a fonte e clique em **Configurar fonte**.
+2. Preencha e-mail e senha e clique em **Salvar e recarregar a fonte**. A extensão faz o login sozinha.
+
+A tela mostra todas as opções que a extensão oferece (chaves, listas, textos), não só o login. Campos de senha ficam mascarados.
+
+**Entrar no site** (quando a extensão só aceita login pelo navegador):
+
+1. Abra a fonte e clique em **Entrar no site**.
+2. O site abre no seu navegador, dentro da WebView do servidor de mangás. Faça login.
+3. Volte ao app e clique em **Populares**. A fonte passa a usar os cookies dessa sessão.
+
+Na primeira vez o servidor baixa o navegador que ele usa (Chromium, cerca de 245 MB; ocupa uns 530 MB no disco). Ele só liga quando você pede o login e desliga quando o app fecha. Sites com verificação do Cloudflare costumam barrar esse navegador.
+
 ### O servidor de mangás
 
 - Ele sobe sozinho quando o NovelShelf abre (se o suporte a mangás estiver ativado) e fecha quando o app fecha.
-- Ele escuta só em `127.0.0.1`, numa porta livre escolhida a cada abertura. Não tem interface web nem ícone na bandeja.
+- Ele escuta só em `127.0.0.1`, numa porta livre escolhida a cada abertura. Não tem interface web nem ícone na bandeja; a única página que ele serve é a WebView de login.
 - Se o NovelShelf travar ou for morto, o servidor também morre:
   - **Linux:** um vigia ligado ao app encerra o Java quando o app some.
   - **Windows:** um *Job Object* faz o mesmo.
@@ -221,7 +240,7 @@ tests/
 | `KindleLocator` / `KindleSender` | Acham o Kindle (disco ou MTP via `gio`) e copiam o livro, substituindo o anterior. |
 | `IComicProvider` | Contrato de quadrinhos: fontes, explorar/buscar, detalhes, capítulos e páginas. |
 | `SuwayomiInstaller` / `SuwayomiServer` | Baixam Java e Suwayomi com checksum fixo, sobem o servidor em `127.0.0.1` e o encerram junto com o app. |
-| `SuwayomiClient` | Cliente GraphQL do Suwayomi: repositório do Project Nox, extensões e implementação do `IComicProvider`. |
+| `SuwayomiClient` | Cliente GraphQL do Suwayomi: repositório do Project Nox, extensões, opções e WebView de login das fontes e implementação do `IComicProvider`. |
 | `ComicDownloader` | Baixa as páginas dos próximos capítulos para `comics/`. |
 | `ComicPageProcessor` | Corta margens, divide páginas duplas, fatia webtoons, corta faixas deitadas e ajusta ao tamanho da tela. |
 | `PanelDetector` | Acha os quadros da página sem IA: separa o desenho do fundo, segue as calhas a partir da borda e põe os quadros na ordem de leitura. |
