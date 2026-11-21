@@ -52,7 +52,8 @@ public sealed class ComicExporter(LibraryStore store, AppPaths paths, ComicDownl
                 progress?.Report(new ComicExportProgress(done++, total, chapter.Title));
                 var files = downloader.PageFiles(comic.Id, chapter);
                 var pages = await Task.WhenAll(files.Select(f => File.ReadAllBytesAsync(f, ct)));
-                var processed = await Task.Run(() => ComicPageProcessor.ProcessChapter(pages, options), ct);
+                var cuts = store.GetPageCuts(comic.Id, chapter.Key);
+                var processed = await Task.Run(() => ComicPageProcessor.ProcessChapter(pages, options, ct, cuts), ct);
                 chapters.Add(new ComicChapter(chapter.Title, processed));
             }
 

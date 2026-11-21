@@ -86,6 +86,43 @@ public sealed class ComicLibraryTests : IDisposable
     }
 
     [Fact]
+    public async Task Page_cuts_are_kept_per_page_across_downloads_and_go_away_with_the_work()
+    {
+        var comic = _store.UpsertComic(_provider.Details("Invencível"));
+        await _downloader.DownloadNextAsync(comic.Id, 1, ct: Ct);
+        var chapter = Assert.Single(_store.GetComicChapters(comic.Id));
+        var cuts = new PageCuts { Rows = [0.6, 0.3], Columns = [new VerticalCut(0.5, 0.1)] };
+
+        _store.SetPageCuts(comic.Id, chapter.Key, 2, cuts);
+        await _downloader.DownloadNextAsync(comic.Id, 2, ct: Ct);
+
+        var saved = new LibraryStore(_paths.Database).GetPageCuts(comic.Id, chapter.Key);
+        Assert.Equal([2], saved.Keys);
+        Assert.Equal([0.3, 0.6], saved[2].Rows);
+        Assert.Equal([new VerticalCut(0.5, 0.1)], saved[2].Columns);
+
+        _store.SetPageCuts(comic.Id, chapter.Key, 2, null);
+        Assert.Empty(_store.GetPageCuts(comic.Id, chapter.Key));
+
+        _store.SetPageCuts(comic.Id, chapter.Key, 0, cuts);
+        _store.DeleteNovel(comic.Id);
+        Assert.Empty(_store.GetPageCuts(comic.Id, chapter.Key));
+    }
+
+    [Fact]
+    public void Editing_cuts_of_a_sent_work_marks_it_for_resend()
+    {
+        var comic = _store.UpsertComic(_provider.Details("Invencível"));
+        _store.SetPageCuts(comic.Id, "c1", 0, new PageCuts { Rows = [0.5] });
+        Assert.False(_store.GetNovel(comic.Id)!.NeedsResend);
+
+        _store.MarkSent(comic.Id, 0);
+        _store.SetPageCuts(comic.Id, "c1", 0, new PageCuts { Rows = [0.4] });
+
+        Assert.True(_store.GetNovel(comic.Id)!.NeedsResend);
+    }
+
+    [Fact]
     public async Task Download_fetches_next_chapters_in_reading_order_and_reports_the_end()
     {
         var comic = _store.UpsertComic(_provider.Details("Invencível"));
