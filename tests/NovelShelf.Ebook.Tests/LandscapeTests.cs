@@ -414,6 +414,48 @@ public sealed class LandscapeTests
     }
 
     [Fact]
+    public void Manual_boxes_become_the_panels_in_reading_order()
+    {
+        var cuts = new PageCuts { Panels = [new(0.55, 0.1, 0.95, 0.45), new(0.05, 0.1, 0.45, 0.45), new(0.1, 0.6, 0.9, 0.9)] };
+
+        var western = ComicPageProcessor.PlanPanels(Grid(), Options(PanelMode), cuts)!;
+        var manga = ComicPageProcessor.PlanPanels(Grid(), Options(PanelMode) with { RightToLeft = true }, cuts)!;
+        var screens = ComicPageProcessor.ProcessPage(Grid(), Options(PanelMode), cuts);
+
+        Assert.Equal(PageCutKind.Manual, western.Kind);
+        Assert.Equal([new PanelBox(40, 120, 360, 540), new PanelBox(440, 120, 760, 540), new PanelBox(80, 720, 720, 1080)], western.Panels);
+        Assert.Equal(new PanelBox(440, 120, 760, 540), manga.Panels[0]);
+        Assert.Equal(3, screens.Count);
+        Assert.Equal([1, 0, 2], cuts.PanelOrder(rightToLeft: false));
+        Assert.Equal([0, 1, 2], cuts.PanelOrder(rightToLeft: true));
+    }
+
+    [Fact]
+    public void Boxes_win_over_lines_in_panel_mode_and_are_ignored_by_bands()
+    {
+        var boxes = new PageCuts { Rows = [0.5], Columns = [new VerticalCut(0.5, 0.25)], Panels = [new(0, 0, 1, 1)] };
+
+        var panels = ComicPageProcessor.PlanPanels(Grid(), Options(PanelMode), boxes)!;
+        var bands = ComicPageProcessor.PlanLandscape(Tiers(800, (40, 500), (600, 1160)), Options(Landscape), new PageCuts { Panels = [new(0, 0, 1, 1)] })!;
+
+        Assert.Equal([new PanelBox(0, 0, 800, 1200)], panels.Panels);
+        Assert.NotEqual(PageCutKind.Manual, bands.Kind);
+    }
+
+    [Fact]
+    public void Boxes_survive_json_and_old_cuts_keep_their_json()
+    {
+        var lines = new PageCuts { Rows = [0.5] };
+        var cuts = new PageCuts { Panels = [new(0.9, 0.5, 0.1, 0.2), new(0.5, 0.5, 0.505, 0.9), new(-0.2, 0, 0.4, 1.3)] };
+
+        var loaded = PageCuts.FromJson(cuts.ToJson())!;
+
+        Assert.Equal([new PanelFrame(0.1, 0.2, 0.9, 0.5), new PanelFrame(0, 0, 0.4, 1)], loaded.Normalized().Panels);
+        Assert.False(loaded.IsEmpty);
+        Assert.DoesNotContain("Panels", lines.ToJson());
+    }
+
+    [Fact]
     public void Splash_page_stays_whole_in_panel_mode()
     {
         var page = Page(800, 1200, c => c.DrawRect(40, 40, 720, 1120, Fill(90)));

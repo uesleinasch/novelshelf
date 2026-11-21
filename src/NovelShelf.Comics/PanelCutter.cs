@@ -1,6 +1,6 @@
 namespace NovelShelf.Comics;
 
-internal sealed record ManualGrid(IReadOnlyList<int> Rows, IReadOnlyList<(int X, int Y)> Columns);
+internal sealed record ManualGrid(IReadOnlyList<int> Rows, IReadOnlyList<(int X, int Y)> Columns, IReadOnlyList<PanelBox> Boxes);
 
 internal static class PanelCutter
 {
@@ -39,6 +39,16 @@ internal static class PanelCutter
     private static PageCut Manual(Raster page, bool rightToLeft, ManualGrid grid)
     {
         int width = page.Width, height = page.Height;
+        if (grid.Boxes.Count > 0)
+        {
+            var boxes = grid.Boxes
+                .Select(b => new PanelBox(Math.Clamp(b.Left, 0, width), Math.Clamp(b.Top, 0, height),
+                    Math.Clamp(b.Right, 0, width), Math.Clamp(b.Bottom, 0, height)))
+                .Where(b => b.Width > 0 && b.Height > 0);
+            var layout = PanelDetector.Arrange(boxes, rightToLeft, width, height);
+            if (layout.Panels.Count > 0)
+                return new PageCut(PageCutKind.Manual, width, height, layout.Rows) { Panels = layout.Panels };
+        }
         var edges = grid.Rows.Where(r => r > 0 && r < height).Order().Distinct().Prepend(0).Append(height).ToList();
         var bands = edges.Zip(edges.Skip(1)).Select(e => new RowRange(e.First, e.Second)).ToList();
         var panels = new List<PanelBox>();
