@@ -8,6 +8,7 @@
     <Project Path="src/NovelShelf.Sources.Illusia/NovelShelf.Sources.Illusia.csproj" />
     <Project Path="src/NovelShelf.Sources.NovelMania/NovelShelf.Sources.NovelMania.csproj" />
     <Project Path="src/NovelShelf.Suwayomi/NovelShelf.Suwayomi.csproj" />
+    <Project Path="src/NovelShelf.Vision/NovelShelf.Vision.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/NovelShelf.Ebook.Tests/NovelShelf.Ebook.Tests.csproj" />
