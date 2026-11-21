@@ -9,7 +9,7 @@ public sealed record ComicPageOptions(
     int JpegQuality = 85)
 {
     // Bump when the same page and settings start producing different screens, or stale cached pages keep being used.
-    public const int PipelineVersion = 1;
+    public const int PipelineVersion = 2;
 
     public ComicLayout EffectiveLayout => (Layout ?? ComicLayout.Default).Normalized();
 
@@ -109,6 +109,19 @@ public static class ComicPageProcessor
         var bounds = MarginBounds(source, options.EffectiveLayout);
         var plan = LandscapeCutter.Plan(source.Crop(bounds), options.Profile, options.EffectiveLayout, ManualRows(cuts, bounds, source.Height));
         return plan with { SourceWidth = source.Width, SourceHeight = source.Height, CropLeft = bounds.Left, CropTop = bounds.Top };
+    }
+
+    public static IReadOnlyList<PanelFrame> DetectPanels(byte[] data, ComicPageOptions options)
+    {
+        var source = Raster.Decode(data, color: false);
+        if (source is null)
+            return [];
+        var bounds = MarginBounds(source, options.EffectiveLayout);
+        var layout = PanelDetector.Detect(source.Crop(bounds), options.RightToLeft);
+        return layout.Panels.Select(p => new PanelFrame(
+                (double)(bounds.Left + p.Left) / source.Width, (double)(bounds.Top + p.Top) / source.Height,
+                (double)(bounds.Left + p.Right) / source.Width, (double)(bounds.Top + p.Bottom) / source.Height))
+            .ToList();
     }
 
     private static IReadOnlyList<int>? ManualRows(PageCuts? cuts, SKRectI bounds, int sourceHeight) =>

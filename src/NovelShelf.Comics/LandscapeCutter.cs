@@ -6,6 +6,7 @@ public enum PageCutKind
     Slices,
     Whole,
     Manual,
+    PanelRows,
 }
 
 [Flags]
@@ -50,6 +51,7 @@ internal static class LandscapeCutter
 
     private const double TinyScreen = 0.25;
     private const double HugeScreen = 1.2;
+    private const double MinPanelCoverage = 0.5;
 
     public static PageCut Plan(Raster page, KindleProfile profile, ComicLayout layout, IReadOnlyList<int>? manualRows = null)
     {
@@ -57,6 +59,8 @@ internal static class LandscapeCutter
             return Manual(page, manualRows);
         var screenRows = (double)page.Width * profile.Width / profile.Height;
         var plan = Detect(page, screenRows, layout);
+        if (plan.Kind is PageCutKind.Slices or PageCutKind.Whole && PanelRows(page, screenRows, layout) is { } rows)
+            plan = rows;
         var suspicion = plan.Kind is PageCutKind.Slices or PageCutKind.Whole ? PageSuspicion.NoClearGutter : PageSuspicion.None;
         if (plan.Screens.Any(s => s.Height < TinyScreen * screenRows))
             suspicion |= PageSuspicion.TinyPiece;
@@ -105,6 +109,28 @@ internal static class LandscapeCutter
                 : new PageCut(PageCutKind.Whole, width, height, [only]);
         }
 
+        return new PageCut(PageCutKind.Bands, width, height, Screens(bands, height, screenRows, layout));
+    }
+
+    private static PageCut? PanelRows(Raster page, double screenRows, ComicLayout layout)
+    {
+        var panels = PanelDetector.Detect(page, rightToLeft: false);
+        if (panels.Rows.Count < 2 || panels.Coverage < MinPanelCoverage)
+            return null;
+        var rows = panels.Rows;
+        var bands = new List<RowRange>(rows.Count);
+        for (var i = 0; i < rows.Count; i++)
+        {
+            var top = i == 0 ? rows[i].Top : (rows[i - 1].Bottom + rows[i].Top) / 2;
+            var bottom = i == rows.Count - 1 ? rows[i].Bottom : (rows[i].Bottom + rows[i + 1].Top) / 2;
+            if (bottom > top)
+                bands.Add(new RowRange(top, bottom));
+        }
+        return new PageCut(PageCutKind.PanelRows, page.Width, page.Height, Screens(bands, page.Height, screenRows, layout));
+    }
+
+    private static List<RowRange> Screens(List<RowRange> bands, int height, double screenRows, ComicLayout layout)
+    {
         var pad = Math.Max(1, height / 200);
         var screens = new List<RowRange>();
         for (var i = 0; i < bands.Count;)
@@ -120,7 +146,7 @@ internal static class LandscapeCutter
                 screens.Add(group);
             i = next;
         }
-        return new PageCut(PageCutKind.Bands, width, height, screens);
+        return screens;
     }
 
     private static List<RowRange> Split(RowRange range, double screenRows, ComicLayout layout)

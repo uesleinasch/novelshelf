@@ -306,6 +306,70 @@ public sealed class LandscapeTests
         Assert.NotEqual(plain.Fingerprint, (plain with { RightToLeft = true }).Fingerprint);
     }
 
+    private static byte[] Grid() => Page(800, 1200, c =>
+    {
+        var border = new SKPaint { Color = SKColors.Black, Style = SKPaintStyle.Stroke, StrokeWidth = 4 };
+        foreach (var (left, top) in new[] { (40, 40), (410, 40), (40, 620), (410, 620) })
+        {
+            c.DrawRect(left, top, 350, 540, border);
+            c.DrawCircle(left + 175, top + 270, 60, Fill(60));
+        }
+    });
+
+    private static SKPath Polygon(params (float X, float Y)[] points)
+    {
+        var path = new SKPath();
+        path.AddPoly(points.Select(p => new SKPoint(p.X, p.Y)).ToArray());
+        return path;
+    }
+
+    [Fact]
+    public void Bordered_panels_are_found_in_reading_order()
+    {
+        var options = Options(Landscape);
+
+        var panels = ComicPageProcessor.DetectPanels(Grid(), options);
+        var manga = ComicPageProcessor.DetectPanels(Grid(), options with { RightToLeft = true });
+
+        Assert.Equal(4, panels.Count);
+        (double Left, double Top)[] expected = [(0.05, 0.03), (0.51, 0.03), (0.05, 0.52), (0.51, 0.52)];
+        Assert.All(expected.Zip(panels), pair =>
+        {
+            Assert.InRange(pair.Second.Left, pair.First.Left - 0.02, pair.First.Left + 0.02);
+            Assert.InRange(pair.Second.Top, pair.First.Top - 0.02, pair.First.Top + 0.02);
+        });
+        Assert.Equal([panels[1], panels[0], panels[3], panels[2]], manga);
+    }
+
+    [Fact]
+    public void Slanted_gutter_is_cut_along_the_panel_rows()
+    {
+        var page = Page(800, 1200, c =>
+        {
+            c.DrawPath(Polygon((20, 40), (780, 40), (780, 580), (20, 620)), Fill(90));
+            c.DrawPath(Polygon((20, 650), (780, 610), (780, 1160), (20, 1160)), Fill(90));
+        });
+
+        var plan = ComicPageProcessor.PlanLandscape(page, Options(Landscape))!;
+
+        Assert.Equal(PageCutKind.PanelRows, plan.Kind);
+        Assert.False(plan.IsSuspect);
+        Assert.Equal(2, plan.Screens.Count);
+        Assert.InRange(plan.Screens[0].Bottom, 600, 660);
+    }
+
+    [Fact]
+    public void Splash_page_is_a_single_panel()
+    {
+        var page = Page(800, 1200, c => c.DrawRect(40, 40, 720, 1120, Fill(90)));
+
+        var panels = ComicPageProcessor.DetectPanels(page, Options(Landscape));
+        var plan = ComicPageProcessor.PlanLandscape(page, Options(Landscape))!;
+
+        Assert.Single(panels);
+        Assert.Equal(PageCutKind.Whole, plan.Kind);
+    }
+
     private sealed class CountingStore : IConvertedPageStore
     {
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (byte[] Key, List<byte[]> Screens)> _entries = [];
