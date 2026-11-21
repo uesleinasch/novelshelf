@@ -5,6 +5,16 @@ public enum PageCutKind
     Bands,
     Slices,
     Whole,
+    Manual,
+}
+
+[Flags]
+public enum PageSuspicion
+{
+    None = 0,
+    NoClearGutter = 1,
+    TinyPiece = 2,
+    HugePiece = 4,
 }
 
 public readonly record struct RowRange(int Top, int Bottom)
@@ -12,7 +22,24 @@ public readonly record struct RowRange(int Top, int Bottom)
     public int Height => Bottom - Top;
 }
 
-public sealed record PageCut(PageCutKind Kind, int Width, int Height, IReadOnlyList<RowRange> Screens);
+public sealed record PageCut(PageCutKind Kind, int Width, int Height, IReadOnlyList<RowRange> Screens)
+{
+    public PageSuspicion Suspicion { get; init; }
+    public int SourceWidth { get; init; }
+    public int SourceHeight { get; init; }
+    public int CropLeft { get; init; }
+    public int CropTop { get; init; }
+
+    public bool IsSuspect => Suspicion != PageSuspicion.None;
+
+    public double Confidence =>
+        1.0
+        - (Suspicion.HasFlag(PageSuspicion.NoClearGutter) ? 0.5 : 0)
+        - (Suspicion.HasFlag(PageSuspicion.TinyPiece) ? 0.25 : 0)
+        - (Suspicion.HasFlag(PageSuspicion.HugePiece) ? 0.25 : 0);
+
+    public double ToSourceFraction(int croppedRow) => SourceHeight == 0 ? 0 : (double)(CropTop + croppedRow) / SourceHeight;
+}
 
 internal static class LandscapeCutter
 {
@@ -21,10 +48,33 @@ internal static class LandscapeCutter
     private const double CleanGutter = 0.985;
     private const double WeakGutter = 0.8;
 
-    public static PageCut Plan(Raster page, KindleProfile profile, ComicLayout layout)
+    private const double TinyScreen = 0.25;
+    private const double HugeScreen = 1.2;
+
+    public static PageCut Plan(Raster page, KindleProfile profile, ComicLayout layout, IReadOnlyList<int>? manualRows = null)
+    {
+        if (manualRows is not null)
+            return Manual(page, manualRows);
+        var screenRows = (double)page.Width * profile.Width / profile.Height;
+        var plan = Detect(page, screenRows, layout);
+        var suspicion = plan.Kind is PageCutKind.Slices or PageCutKind.Whole ? PageSuspicion.NoClearGutter : PageSuspicion.None;
+        if (plan.Screens.Any(s => s.Height < TinyScreen * screenRows))
+            suspicion |= PageSuspicion.TinyPiece;
+        if (plan.Kind != PageCutKind.Whole && plan.Screens.Any(s => s.Height > HugeScreen * screenRows))
+            suspicion |= PageSuspicion.HugePiece;
+        return plan with { Suspicion = suspicion };
+    }
+
+    private static PageCut Manual(Raster page, IReadOnlyList<int> rows)
+    {
+        var edges = rows.Where(r => r > 0 && r < page.Height).Order().Distinct().Prepend(0).Append(page.Height).ToList();
+        var screens = edges.Zip(edges.Skip(1)).Select(e => new RowRange(e.First, e.Second)).ToList();
+        return new PageCut(PageCutKind.Manual, page.Width, page.Height, screens);
+    }
+
+    private static PageCut Detect(Raster page, double screenRows, ComicLayout layout)
     {
         int width = page.Width, height = page.Height;
-        var screenRows = (double)width * profile.Width / profile.Height;
         var background = BackgroundShare(page);
         var minGutter = Math.Max(2, height / 250);
 

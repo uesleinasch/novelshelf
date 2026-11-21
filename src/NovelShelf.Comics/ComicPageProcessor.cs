@@ -36,27 +36,34 @@ public static class ComicPageProcessor
         _ => IsWebtoon(pages),
     };
 
-    public static List<byte[]> ProcessChapter(IReadOnlyList<byte[]> pages, ComicPageOptions options, CancellationToken ct = default)
+    public static List<byte[]> ProcessChapter(IReadOnlyList<byte[]> pages, ComicPageOptions options, CancellationToken ct = default,
+        IReadOnlyDictionary<int, PageCuts>? cuts = null)
     {
         if (options.EffectiveLayout.Mode != ComicReadingMode.Landscape && UsesStrip(pages, options.EffectiveLayout))
             return ProcessStrip(pages, options, ct);
-
-        var results = new List<byte[]>[pages.Count];
-        Parallel.For(0, pages.Count, new ParallelOptions { MaxDegreeOfParallelism = Workers, CancellationToken = ct },
-            i => results[i] = ProcessPage(pages[i], options));
-        return results.SelectMany(r => r).ToList();
+        return ProcessChapterByPage(pages, options, cuts, ct).SelectMany(r => r).ToList();
     }
 
-    public static List<byte[]> ProcessPage(byte[] data, ComicPageOptions options)
+    public static List<byte[]>[] ProcessChapterByPage(IReadOnlyList<byte[]> pages, ComicPageOptions options,
+        IReadOnlyDictionary<int, PageCuts>? cuts = null, CancellationToken ct = default)
+    {
+        var results = new List<byte[]>[pages.Count];
+        Parallel.For(0, pages.Count, new ParallelOptions { MaxDegreeOfParallelism = Workers, CancellationToken = ct },
+            i => results[i] = ProcessPage(pages[i], options, cuts?.GetValueOrDefault(i)));
+        return results;
+    }
+
+    public static List<byte[]> ProcessPage(byte[] data, ComicPageOptions options, PageCuts? cuts = null)
     {
         var layout = options.EffectiveLayout;
         var source = Raster.Decode(data, options.Profile.Color);
         if (source is null)
             return [];
 
-        var cropped = CropMargins(source, layout);
+        var bounds = MarginBounds(source, layout);
+        var cropped = source.Crop(bounds);
         if (layout.Mode == ComicReadingMode.Landscape)
-            return ProcessLandscape(cropped, options);
+            return ProcessLandscape(cropped, options, ManualRows(cuts, bounds, source.Height));
         if (cropped.Width > cropped.Height * 1.05 && layout.WidePages != WidePageMode.Keep)
         {
             if (layout.WidePages == WidePageMode.Rotate)
@@ -71,24 +78,33 @@ public static class ComicPageProcessor
         return [FitAndEncode(cropped, options)];
     }
 
-    public static PageCut? PlanLandscape(byte[] data, ComicPageOptions options)
+    public static PageCut? PlanLandscape(byte[] data, ComicPageOptions options, PageCuts? cuts = null)
     {
         var source = Raster.Decode(data, options.Profile.Color);
-        return source is null ? null : LandscapeCutter.Plan(CropMargins(source, options.EffectiveLayout), options.Profile, options.EffectiveLayout);
+        if (source is null)
+            return null;
+        var bounds = MarginBounds(source, options.EffectiveLayout);
+        var plan = LandscapeCutter.Plan(source.Crop(bounds), options.Profile, options.EffectiveLayout, ManualRows(cuts, bounds, source.Height));
+        return plan with { SourceWidth = source.Width, SourceHeight = source.Height, CropLeft = bounds.Left, CropTop = bounds.Top };
     }
 
-    private static Raster CropMargins(Raster source, ComicLayout layout) => source.Crop(layout.Margins switch
+    private static IReadOnlyList<int>? ManualRows(PageCuts? cuts, SKRectI bounds, int sourceHeight) =>
+        cuts is null || cuts.Rows.Count == 0 && cuts.Columns.Count == 0
+            ? null
+            : cuts.Rows.Select(r => (int)Math.Round(r * sourceHeight) - bounds.Top).ToList();
+
+    private static SKRectI MarginBounds(Raster source, ComicLayout layout) => layout.Margins switch
     {
         MarginMode.Auto => ContentBounds(source),
         MarginMode.Manual => ManualBounds(source.Width, source.Height, layout),
         _ => new SKRectI(0, 0, source.Width, source.Height),
-    });
+    };
 
-    private static List<byte[]> ProcessLandscape(Raster page, ComicPageOptions options)
+    private static List<byte[]> ProcessLandscape(Raster page, ComicPageOptions options, IReadOnlyList<int>? manualRows)
     {
-        var plan = LandscapeCutter.Plan(page, options.Profile, options.EffectiveLayout);
+        var plan = LandscapeCutter.Plan(page, options.Profile, options.EffectiveLayout, manualRows);
         var output = new List<byte[]>(plan.Screens.Count + 1);
-        if (options.EffectiveLayout.PageBeforeBands && plan.Kind != PageCutKind.Whole)
+        if (options.EffectiveLayout.PageBeforeBands && plan.Screens.Count > 1)
             output.Add(FitLandscape(page, options));
         foreach (var screen in plan.Screens)
             output.Add(FitLandscape(page.Crop(new SKRectI(0, screen.Top, page.Width, screen.Bottom)), options));

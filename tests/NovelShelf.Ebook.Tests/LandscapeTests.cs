@@ -196,6 +196,66 @@ public sealed class LandscapeTests
     }
 
     [Fact]
+    public void Manual_lines_replace_detection_for_that_page()
+    {
+        var page = Tiers(1000, (50, 450), (500, 950), (1000, 1450));
+
+        var plan = ComicPageProcessor.PlanLandscape(page, Options(Landscape), new PageCuts { Rows = [0.5] })!;
+        var screens = ComicPageProcessor.ProcessPage(page, Options(Landscape), new PageCuts { Rows = [0.5] });
+        var whole = ComicPageProcessor.PlanLandscape(page, Options(Landscape), new PageCuts { Columns = [new VerticalCut(0.5, 0.5)] })!;
+
+        Assert.Equal(PageCutKind.Manual, plan.Kind);
+        Assert.Equal([new RowRange(0, 750), new RowRange(750, 1500)], plan.Screens);
+        Assert.False(plan.IsSuspect);
+        Assert.Equal(2, screens.Count);
+        Assert.Equal(new RowRange(0, 1500), Assert.Single(whole.Screens));
+    }
+
+    [Fact]
+    public void Manual_lines_are_fractions_of_the_original_page_even_after_margin_crop()
+    {
+        var page = Tiers(1000, (200, 600), (650, 1050));
+        var layout = Landscape with { Margins = MarginMode.Auto };
+
+        var plan = ComicPageProcessor.PlanLandscape(page, Options(layout), new PageCuts { Rows = [625.0 / 1100] })!;
+
+        Assert.True(plan.CropTop > 100);
+        Assert.Equal(1100, plan.SourceHeight);
+        Assert.Equal(2, plan.Screens.Count);
+        Assert.Equal(625, plan.CropTop + plan.Screens[0].Bottom);
+        Assert.Equal(625.0 / 1100, plan.ToSourceFraction(plan.Screens[0].Bottom), 3);
+    }
+
+    [Fact]
+    public void Clean_tiers_are_trusted_and_doubtful_pages_are_flagged()
+    {
+        var clean = ComicPageProcessor.PlanLandscape(Tiers(1000, (50, 450), (500, 950), (1000, 1450)), Options(Landscape))!;
+        var splash = ComicPageProcessor.PlanLandscape(Page(1000, 1500, c => c.DrawRect(0, 0, 1000, 1500, Fill(120))), Options(Landscape))!;
+        var tiny = ComicPageProcessor.PlanLandscape(Tiers(1000, (50, 650), (700, 800), (850, 1450)), Options(Landscape with { MergeBands = 0 }))!;
+        var huge = ComicPageProcessor.PlanLandscape(Tiers(1000, (50, 950), (1000, 1400)), Options(Landscape with { TallBand = 2.5 }))!;
+
+        Assert.Equal(PageSuspicion.None, clean.Suspicion);
+        Assert.Equal(1.0, clean.Confidence);
+        Assert.Equal(PageSuspicion.NoClearGutter, splash.Suspicion);
+        Assert.True(tiny.Suspicion.HasFlag(PageSuspicion.TinyPiece));
+        Assert.True(huge.Suspicion.HasFlag(PageSuspicion.HugePiece));
+        Assert.True(splash.Confidence < clean.Confidence);
+    }
+
+    [Fact]
+    public void Page_cuts_survive_json_and_drop_lines_on_the_edges()
+    {
+        var cuts = new PageCuts { Rows = [0.7, 0.2, 0.2, 1.0, 0], Columns = [new VerticalCut(0.4, 0.1), new VerticalCut(1.2, 0.1)] };
+
+        var loaded = PageCuts.FromJson(cuts.ToJson())!;
+
+        Assert.Equal([0.2, 0.7], loaded.Rows);
+        Assert.Equal([new VerticalCut(0.4, 0.1)], loaded.Columns);
+        Assert.Equal([(0.0, 0.2), (0.2, 0.7), (0.7, 1.0)], loaded.Bands());
+        Assert.Null(PageCuts.FromJson("lixo"));
+    }
+
+    [Fact]
     public void Landscape_settings_survive_json_and_are_clamped()
     {
         var layout = new ComicLayout
