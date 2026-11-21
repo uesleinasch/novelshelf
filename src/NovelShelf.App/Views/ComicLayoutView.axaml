@@ -61,15 +61,15 @@
                 <KeyBinding Gesture="Escape" Command="{Binding CloseCommand}" />
             </Grid.KeyBindings>
             <StackPanel Grid.ColumnSpan="2" Spacing="4" Margin="0,0,0,8">
-                <TextBlock Text="{Binding ChapterTitle, StringFormat='Linhas de corte — {0}'}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
-                <TextBlock Text="Arraste uma linha para mover. Clique duplo cria uma linha horizontal; Shift + clique duplo cria uma vertical. Clique numa linha e Delete apaga. ← → ou PgUp PgDn trocam de página. Esc fecha."
+                <TextBlock Text="{Binding ChapterTitle, StringFormat='Corte — {0}'}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="Arraste uma forma da barra para a página, ou clique nela para pôr no meio. Arraste a caixa para mover e as bordas para mudar o tamanho. Delete apaga a selecionada. ← → ou PgUp PgDn trocam de página. Esc fecha."
                            FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
             </StackPanel>
             <DockPanel Grid.Row="1" Grid.RowSpan="2" Margin="0,0,12,0">
                 <TextBlock DockPanel.Dock="Top" Text="{Binding Summary}" FontSize="12" Opacity="0.8" TextWrapping="Wrap" Margin="0,0,0,6" />
                 <ToggleSwitch DockPanel.Dock="Top" IsChecked="{Binding OnlySuspect}" OnContent="Só suspeitas e editadas" OffContent="Todas as páginas" />
-                <ToggleSwitch DockPanel.Dock="Top" IsChecked="{Binding ShowPanels}" OnContent="Mostrar quadros detectados" OffContent="Esconder quadros"
-                              ToolTip.Tip="Contorno verde em cada quadro achado, numerado na ordem de leitura; tracejado laranja nos balões achados pela IA" />
+                <ToggleSwitch DockPanel.Dock="Top" IsChecked="{Binding ShowPanels}" OnContent="Mostrar detecções" OffContent="Esconder detecções"
+                              ToolTip.Tip="Contorno verde nos quadros achados (nas faixas deitadas) e tracejado laranja nos balões achados pela IA" />
                 <ui:FAProgressRing DockPanel.Dock="Top" IsIndeterminate="True" Width="32" Height="32" IsVisible="{Binding IsLoading}" />
                 <ListBox ItemsSource="{Binding Visible}" SelectedItem="{Binding Selected}" Background="Transparent">
                     <ListBox.ItemTemplate>
@@ -82,10 +82,22 @@
                     </ListBox.ItemTemplate>
                 </ListBox>
             </DockPanel>
-            <Border Grid.Row="1" Grid.Column="1" Padding="8" CornerRadius="8" Background="#1f1f1f">
-                <views:CutCanvas Source="{Binding Source}" Cuts="{Binding Cuts}" Panels="{Binding ShownPanels}" Bubbles="{Binding ShownBubbles}" />
-            </Border>
-            <Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,12,0,0">
+            <DockPanel Grid.Row="1" Grid.Column="1">
+                <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Spacing="8" Margin="0,0,0,8">
+                    <Button x:Name="AddPanelButton" Content="▭ Quadro" IsVisible="{Binding EditsPanels}"
+                            ToolTip.Tip="Arraste para a página, ou clique para pôr no meio. Cada quadro vira uma tela, na ordem dos números." />
+                    <Button x:Name="AddRowButton" Content="― Linha" IsVisible="{Binding !EditsPanels}"
+                            ToolTip.Tip="Arraste para a página, ou clique para pôr no meio da maior faixa. Cada faixa entre linhas vira uma tela." />
+                    <Button x:Name="DeleteShapeButton" Content="Apagar" ToolTip.Tip="Apaga a forma selecionada (Delete)" />
+                    <Button Content="Voltar ao automático" Command="{Binding ResetPageCommand}"
+                            ToolTip.Tip="Apaga o corte manual desta página e volta para a detecção" />
+                </StackPanel>
+                <Border Padding="8" CornerRadius="8" Background="#1f1f1f">
+                    <views:CutCanvas x:Name="CutArea" Source="{Binding Source}" Cuts="{Binding Cuts}" EditsPanels="{Binding EditsPanels}"
+                                     RightToLeft="{Binding RightToLeft}" Detected="{Binding ShownPanels}" Bubbles="{Binding ShownBubbles}" />
+                </Border>
+            </DockPanel>
+            <Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="Auto,*,Auto,Auto" Margin="0,12,0,0">
                 <Button Command="{Binding PreviousCommand}" ToolTip.Tip="Página anterior da lista">
                     <ui:FASymbolIcon Symbol="Back" />
                 </Button>
@@ -93,9 +105,7 @@
                 <Button Grid.Column="2" Command="{Binding NextCommand}" ToolTip.Tip="Próxima página da lista" Margin="0,0,12,0">
                     <ui:FASymbolIcon Symbol="Forward" />
                 </Button>
-                <Button Grid.Column="3" Content="Voltar à detecção" Command="{Binding ResetPageCommand}" Margin="0,0,8,0"
-                        ToolTip.Tip="Apaga as linhas manuais desta página" />
-                <Button Grid.Column="4" Classes="accent" Content="Fechar editor" Command="{Binding CloseCommand}" />
+                <Button Grid.Column="3" Classes="accent" Content="Fechar editor" Command="{Binding CloseCommand}" />
             </Grid>
         </Grid>
         </Panel>
@@ -214,7 +224,7 @@
                                Text="{Binding PanelModelSize, StringFormat='Um modelo de IA acha os quadros mesmo sem calha branca, colados ou de borda escura. Se ele não achar nada, volta para as calhas. Roda no seu computador; na primeira vez baixa {0} (licença Apache-2.0).'}" />
                     <TextBlock Text="{Binding ModelStatus}" FontSize="12" TextWrapping="Wrap"
                                IsVisible="{Binding ModelStatus, Converter={x:Static ObjectConverters.IsNotNull}}" />
-                    <Button Content="Editar linhas de corte" Command="{Binding OpenCutEditorCommand}"
+                    <Button Content="Editar corte" Command="{Binding OpenCutEditorCommand}"
                             ToolTip.Tip="Abre as páginas suspeitas deste capítulo. Clicar no preview abre a página da tela mostrada." />
                 </StackPanel>
 
