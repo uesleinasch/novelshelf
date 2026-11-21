@@ -159,13 +159,15 @@ Os sites de quadrinhos vêm das **extensões do Mihon** (o leitor de mangá do A
   - Kindle Paperwhite 11ª/12ª geração (6,8", 1236×1648).
 - **Marcado como quadrinho:** o AZW3 informa ao Kindle que é quadrinho, sem margem e em retrato, com a resolução da tela. Assim o Kindle mostra a página inteira, sem reservar espaço no topo.
 - **Ajuste por obra:** na biblioteca, **Ajustar corte** abre um preview das telas exatas do Kindle. Lá dá para escolher:
-  - formato (páginas ou tira contínua);
+  - formato (páginas, tira contínua ou faixas deitadas);
   - margens (sozinho, sem corte ou manual, para dar zoom);
   - páginas duplas (dividir, manter ou girar);
   - no webtoon, quanto repetir no topo da tela seguinte e até onde procurar um espaço entre quadros;
+  - nitidez e contraste para e-ink (ligado por padrão);
   - tons médios (gama).
 
-  O ajuste fica salvo para aquela obra, e Converter e Enviar passam a usá-lo.
+  O ajuste fica salvo para aquela obra, e Converter e Enviar passam a usá-lo. Trocar o formato de uma obra já enviada muda o número de telas, e o marcador de leitura vai parar em outro ponto; o app avisa antes de salvar.
+- **Faixas deitadas** (para HQ com letra pequena no Kindle de 6"): cada faixa de quadros vira uma tela para ler com o Kindle deitado, então a letra fica maior. O livro continua em pé, porque a imagem já vai girada; você escolhe o lado do giro. O corte é nos espaços lisos (brancos ou pretos) entre as faixas. Faixas baixas vizinhas dividem uma tela, e faixa alta demais vai em dois pedaços com sobra. Os dois limites são ajustáveis. Página sem espaço claro entre quadros vai em pedaços iguais com sobra, e página de um quadro só (splash) vai inteira. Dá para mostrar a página inteira antes dos pedaços. O app nunca escolhe esse modo sozinho.
 - **Formato:** o livro é um AZW3 de layout fixo (uma imagem por página, sumário por capítulo). Ele usa o mesmo ASIN e o mesmo nome de arquivo (`hq-<obra>.azw3`), então reenviar substitui o livro.
 
 ## Kindle: detalhes importantes
@@ -213,7 +215,7 @@ tests/
 | `SuwayomiInstaller` / `SuwayomiServer` | Baixam Java e Suwayomi com checksum fixo, sobem o servidor em `127.0.0.1` e o encerram junto com o app. |
 | `SuwayomiClient` | Cliente GraphQL do Suwayomi: repositório do Project Nox, extensões e implementação do `IComicProvider`. |
 | `ComicDownloader` | Baixa as páginas dos próximos capítulos para `comics/`. |
-| `ComicPageProcessor` | Corta margens, divide páginas duplas, fatia webtoons e ajusta ao tamanho da tela. |
+| `ComicPageProcessor` | Corta margens, divide páginas duplas, fatia webtoons, corta faixas deitadas e ajusta ao tamanho da tela. |
 | `ComicBookBuilder` / `ComicExporter` | Montam o AZW3 de layout fixo com uma imagem por página. |
 
 ### Fonte Novel Mania

@@ -13,6 +13,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     private readonly AppServices _services;
     private readonly LibraryNovel _comic;
     private readonly Action _close;
+    private ComicLayout _saved;
     private readonly Dictionary<string, IReadOnlyList<byte[]>> _sources = [];
     private IReadOnlyList<byte[]> _rendered = [];
     private CancellationTokenSource? _render;
@@ -25,7 +26,8 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
         _close = close;
         foreach (var chapter in services.Library.GetComicChapters(comic.Id))
             Chapters.Add(chapter);
-        Load(services.Library.GetComicLayout(comic.Id));
+        _saved = services.Library.GetComicLayout(comic.Id);
+        Load(_saved);
         _rightToLeft = comic.RightToLeft;
         _loading = false;
         _chapter = Chapters.FirstOrDefault();
@@ -91,7 +93,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     private bool _detectedStrip;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowStripOptions), nameof(ShowPageOptions))]
+    [NotifyPropertyChangedFor(nameof(ShowStripOptions), nameof(ShowPageOptions), nameof(ShowLandscapeOptions), nameof(ShowVerticalMargins))]
     private int _modeIndex;
 
     [ObservableProperty]
@@ -125,11 +127,30 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     [ObservableProperty]
     private bool _rightToLeft;
 
+    [ObservableProperty]
+    private bool _sharpen;
+
+    [ObservableProperty]
+    private int _turnIndex;
+
+    [ObservableProperty]
+    private double _tallBand;
+
+    [ObservableProperty]
+    private double _mergeBands;
+
+    [ObservableProperty]
+    private bool _pageBeforeBands;
+
+    public Func<string, string, Task<bool>>? Confirm { get; set; }
+
     public int LastPageIndex => Math.Max(0, PageCount - 1);
     public string PageLabel => PageCount == 0 ? "Sem páginas" : $"Tela {PageIndex + 1} de {PageCount}";
-    public bool UsesStrip => ModeIndex == 2 || (ModeIndex == 0 && DetectedStrip);
+    public bool UsesStrip => ModeIndex == (int)ComicReadingMode.Strip || (ModeIndex == (int)ComicReadingMode.Auto && DetectedStrip);
+    public bool ShowLandscapeOptions => ModeIndex == (int)ComicReadingMode.Landscape;
     public bool ShowStripOptions => UsesStrip;
-    public bool ShowPageOptions => !UsesStrip;
+    public bool ShowPageOptions => !UsesStrip && !ShowLandscapeOptions;
+    public bool ShowVerticalMargins => !UsesStrip;
     public bool ShowManualMargins => MarginIndex == 2;
     public string DetectedLabel => DetectedStrip
         ? "Este capítulo parece webtoon (tira contínua)."
@@ -147,6 +168,11 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
         Overlap = Overlap / 100,
         CutSearch = CutSearch / 100,
         Gamma = Gamma,
+        Sharpen = Sharpen,
+        Turn = (LandscapeTurn)TurnIndex,
+        TallBand = TallBand / 100,
+        MergeBands = MergeBands / 100,
+        PageBeforeBands = PageBeforeBands,
     }.Normalized();
 
     private void Load(ComicLayout layout)
@@ -161,6 +187,11 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
         Overlap = Math.Round(layout.Overlap * 100);
         CutSearch = Math.Round(layout.CutSearch * 100);
         Gamma = Math.Round(layout.Gamma, 2);
+        Sharpen = layout.Sharpen;
+        TurnIndex = (int)layout.Turn;
+        TallBand = Math.Round(layout.TallBand * 100);
+        MergeBands = Math.Round(layout.MergeBands * 100);
+        PageBeforeBands = layout.PageBeforeBands;
     }
 
     protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
@@ -184,6 +215,11 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
             case nameof(CutSearch):
             case nameof(Gamma):
             case nameof(RightToLeft):
+            case nameof(Sharpen):
+            case nameof(TurnIndex):
+            case nameof(TallBand):
+            case nameof(MergeBands):
+            case nameof(PageBeforeBands):
                 Message = null;
                 HasPendingChanges = true;
                 break;
@@ -275,11 +311,18 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     private void NextPage() => PageIndex++;
 
     [RelayCommand]
-    private void Save()
+    private async Task SaveAsync()
     {
+        var layout = Layout;
+        if (_comic.SentAt is not null && layout.Mode != _saved.Mode && Confirm is not null
+            && !await Confirm("Trocar o formato de uma obra já enviada",
+                "O número de telas muda e o marcador de leitura no Kindle vai parar em outro ponto do livro. " +
+                "A obra fica marcada para reenviar com o formato novo."))
+            return;
         if (HasPendingChanges)
             ScheduleRender();
-        _services.Library.SetComicLayout(_comic.Id, Layout);
+        _services.Library.SetComicLayout(_comic.Id, layout);
+        _saved = layout;
         _services.Library.SetRightToLeft(_comic.Id, RightToLeft);
         MessageIsError = false;
         Message = "Ajustes salvos para esta obra. Converter e Enviar já usam o novo enquadramento.";

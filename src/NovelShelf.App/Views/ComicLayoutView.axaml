@@ -70,6 +70,7 @@
                         <ComboBoxItem Content="Automático" />
                         <ComboBoxItem Content="Páginas (mangá, HQ)" />
                         <ComboBoxItem Content="Tira contínua (webtoon)" />
+                        <ComboBoxItem Content="Faixas deitadas (ler com o Kindle deitado)" />
                     </ComboBox>
                     <TextBlock Text="{Binding DetectedLabel}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
                 </StackPanel>
@@ -90,7 +91,7 @@
                         <Slider Minimum="0" Maximum="40" Value="{Binding MarginLeft}" TickFrequency="1" IsSnapToTickEnabled="True" />
                         <TextBlock Text="{Binding MarginRight, StringFormat='Direita: {0:0}%'}" FontSize="12" />
                         <Slider Minimum="0" Maximum="40" Value="{Binding MarginRight}" TickFrequency="1" IsSnapToTickEnabled="True" />
-                        <StackPanel Spacing="4" IsVisible="{Binding ShowPageOptions}">
+                        <StackPanel Spacing="4" IsVisible="{Binding ShowVerticalMargins}">
                             <TextBlock Text="{Binding MarginTop, StringFormat='Topo: {0:0}%'}" FontSize="12" />
                             <Slider Minimum="0" Maximum="40" Value="{Binding MarginTop}" TickFrequency="1" IsSnapToTickEnabled="True" />
                             <TextBlock Text="{Binding MarginBottom, StringFormat='Base: {0:0}%'}" FontSize="12" />
@@ -119,6 +120,34 @@
                     <TextBlock Text="{Binding CutSearch, StringFormat='Procurar espaço entre quadros: {0:0}%'}" FontSize="12" Margin="0,8,0,0" />
                     <Slider Minimum="0" Maximum="60" Value="{Binding CutSearch}" TickFrequency="1" IsSnapToTickEnabled="True" />
                     <TextBlock Text="Quanto maior, mais a tela pode encurtar para cortar num espaço vazio em vez de no meio do desenho."
+                               FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel Spacing="6" IsVisible="{Binding ShowLandscapeOptions}">
+                    <TextBlock Text="Faixas deitadas" FontWeight="SemiBold" />
+                    <TextBlock Text="Cada faixa de quadros vira uma tela deitada, cortada nos espaços em branco ou pretos entre os quadros. O livro continua em pé: a imagem já vai girada."
+                               FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                    <ComboBox SelectedIndex="{Binding TurnIndex}" HorizontalAlignment="Stretch" Margin="0,4,0,0">
+                        <ComboBoxItem Content="Girar no sentido horário (Kindle virado para a esquerda)" />
+                        <ComboBoxItem Content="Girar no sentido anti-horário (Kindle virado para a direita)" />
+                    </ComboBox>
+                    <TextBlock Text="{Binding MergeBands, StringFormat='Juntar faixas baixas até: {0:0}% da tela'}" FontSize="12" Margin="0,8,0,0" />
+                    <Slider Minimum="0" Maximum="100" Value="{Binding MergeBands}" TickFrequency="5" IsSnapToTickEnabled="True" />
+                    <TextBlock Text="Duas faixas vizinhas dividem uma tela enquanto cabem nesse tamanho. 0 deixa cada faixa na sua tela."
+                               FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding TallBand, StringFormat='Cortar faixa mais alta que: {0:0}% da tela'}" FontSize="12" Margin="0,8,0,0" />
+                    <Slider Minimum="100" Maximum="250" Value="{Binding TallBand}" TickFrequency="5" IsSnapToTickEnabled="True" />
+                    <TextBlock Text="Faixa maior que isso vai em pedaços. Página sem espaço entre quadros também vai em pedaços iguais; página de um quadro só vai inteira."
+                               FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Overlap, StringFormat='Repetir entre pedaços: {0:0}%'}" FontSize="12" Margin="0,8,0,0" />
+                    <Slider Minimum="0" Maximum="40" Value="{Binding Overlap}" TickFrequency="1" IsSnapToTickEnabled="True" />
+                    <ToggleSwitch IsChecked="{Binding PageBeforeBands}" Margin="0,4,0,0"
+                                  OnContent="Mostrar a página inteira antes dos pedaços" OffContent="Só os pedaços" />
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <ToggleSwitch IsChecked="{Binding Sharpen}" OnContent="Nitidez e contraste para e-ink" OffContent="Sem nitidez extra" />
+                    <TextBlock Text="Estica o preto e o branco da página e reforça os traços. Ajuda letras pequenas na tela do Kindle."
                                FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
                 </StackPanel>
 
