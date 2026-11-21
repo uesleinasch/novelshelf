@@ -13,8 +13,11 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     private readonly AppServices _services;
     private readonly LibraryNovel _comic;
     private readonly Action _close;
+    private ComicLayout _saved;
+    private bool _savedRightToLeft;
     private readonly Dictionary<string, IReadOnlyList<byte[]>> _sources = [];
     private IReadOnlyList<byte[]> _rendered = [];
+    private IReadOnlyList<int> _screenPages = [];
     private CancellationTokenSource? _render;
     private bool _loading = true;
 
@@ -25,10 +28,12 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
         _close = close;
         foreach (var chapter in services.Library.GetComicChapters(comic.Id))
             Chapters.Add(chapter);
-        Load(services.Library.GetComicLayout(comic.Id));
-        _rightToLeft = comic.RightToLeft;
+        _saved = services.Library.GetComicLayout(comic.Id);
+        Load(_saved);
+        _rightToLeft = _savedRightToLeft = comic.RightToLeft;
         _loading = false;
         _chapter = Chapters.FirstOrDefault();
+        RefreshCacheSize();
         ScheduleRender();
     }
 
@@ -45,6 +50,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
                 return;
             _services.Settings.KindleProfile = value.Id;
             _services.Settings.Save();
+            ClearCache();
             OnPropertyChanged();
             OnPropertyChanged(nameof(ProfileName));
             HasPendingChanges = true;
@@ -54,7 +60,15 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     public bool HasChapters => Chapters.Count > 0;
 
     [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(OpenCutEditorCommand))]
     private StoredComicChapter? _chapter;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsEditingCuts))]
+    [NotifyCanExecuteChangedFor(nameof(OpenCutEditorCommand))]
+    private CutEditorViewModel? _cutEditor;
+
+    public bool IsEditingCuts => CutEditor is not null;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(PageLabel))]
@@ -70,7 +84,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     private Bitmap? _preview;
 
     [ObservableProperty]
-    [NotifyCanExecuteChangedFor(nameof(ApplyCommand))]
+    [NotifyCanExecuteChangedFor(nameof(ApplyCommand), nameof(OpenCutEditorCommand))]
     private bool _isRendering;
 
     [ObservableProperty]
@@ -91,7 +105,9 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     private bool _detectedStrip;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(ShowStripOptions), nameof(ShowPageOptions))]
+    [NotifyPropertyChangedFor(nameof(ShowStripOptions), nameof(ShowPageOptions), nameof(ShowLandscapeOptions), nameof(ShowVerticalMargins),
+        nameof(ShowPanelOptions), nameof(ShowCutOptions))]
+    [NotifyCanExecuteChangedFor(nameof(OpenCutEditorCommand))]
     private int _modeIndex;
 
     [ObservableProperty]
@@ -125,11 +141,68 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     [ObservableProperty]
     private bool _rightToLeft;
 
+    [ObservableProperty]
+    private bool _sharpen;
+
+    [ObservableProperty]
+    private int _turnIndex;
+
+    [ObservableProperty]
+    private double _tallBand;
+
+    [ObservableProperty]
+    private double _mergeBands;
+
+    [ObservableProperty]
+    private bool _pageBeforeBands;
+
+    [ObservableProperty]
+    private bool _avoidBubbles;
+
+    [ObservableProperty]
+    private string? _modelStatus;
+
+    public string BubbleModelSize => $"{NovelShelf.Vision.TextModel.Size / 1_000_000.0:0} MB";
+
+    partial void OnAvoidBubblesChanged(bool value)
+    {
+        if (value && !_loading && !_services.TextModel.IsInstalled)
+            _ = InstallBubbleModelAsync();
+    }
+
+    private async Task InstallBubbleModelAsync()
+    {
+        try
+        {
+            ModelStatus = "Baixando o modelo de balões...";
+            await _services.TextModel.InstallAsync(new Progress<NovelShelf.Vision.ModelProgress>(p =>
+                ModelStatus = $"Baixando o modelo de balões: {p.Done / 1_000_000.0:0.0} de {p.Total / 1_000_000.0:0.0} MB"));
+            ModelStatus = null;
+            HasPendingChanges = true;
+        }
+        catch (Exception e) when (e is HttpRequestException or IOException or InvalidOperationException or TaskCanceledException)
+        {
+            ModelStatus = null;
+            AvoidBubbles = false;
+            MessageIsError = true;
+            Message = $"Não deu para baixar o modelo de balões: {e.Message}";
+        }
+    }
+
+    private ComicPageOptions PreviewOptions() =>
+        new(_services.KindleProfile, RightToLeft, Layout, TextDetector: _services.TextModel.Detector);
+
+    public Func<string, string, Task<bool>>? Confirm { get; set; }
+
     public int LastPageIndex => Math.Max(0, PageCount - 1);
     public string PageLabel => PageCount == 0 ? "Sem páginas" : $"Tela {PageIndex + 1} de {PageCount}";
-    public bool UsesStrip => ModeIndex == 2 || (ModeIndex == 0 && DetectedStrip);
+    public bool UsesStrip => ModeIndex == (int)ComicReadingMode.Strip || (ModeIndex == (int)ComicReadingMode.Auto && DetectedStrip);
+    public bool ShowLandscapeOptions => ModeIndex == (int)ComicReadingMode.Landscape;
     public bool ShowStripOptions => UsesStrip;
-    public bool ShowPageOptions => !UsesStrip;
+    public bool ShowPanelOptions => ModeIndex == (int)ComicReadingMode.Panels;
+    public bool ShowCutOptions => ShowLandscapeOptions || ShowPanelOptions;
+    public bool ShowPageOptions => !UsesStrip && !ShowCutOptions;
+    public bool ShowVerticalMargins => !UsesStrip;
     public bool ShowManualMargins => MarginIndex == 2;
     public string DetectedLabel => DetectedStrip
         ? "Este capítulo parece webtoon (tira contínua)."
@@ -147,6 +220,12 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
         Overlap = Overlap / 100,
         CutSearch = CutSearch / 100,
         Gamma = Gamma,
+        Sharpen = Sharpen,
+        Turn = (LandscapeTurn)TurnIndex,
+        TallBand = TallBand / 100,
+        MergeBands = MergeBands / 100,
+        PageBeforeBands = PageBeforeBands,
+        AvoidBubbles = AvoidBubbles,
     }.Normalized();
 
     private void Load(ComicLayout layout)
@@ -161,6 +240,12 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
         Overlap = Math.Round(layout.Overlap * 100);
         CutSearch = Math.Round(layout.CutSearch * 100);
         Gamma = Math.Round(layout.Gamma, 2);
+        Sharpen = layout.Sharpen;
+        TurnIndex = (int)layout.Turn;
+        TallBand = Math.Round(layout.TallBand * 100);
+        MergeBands = Math.Round(layout.MergeBands * 100);
+        PageBeforeBands = layout.PageBeforeBands;
+        AvoidBubbles = layout.AvoidBubbles;
     }
 
     protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
@@ -184,6 +269,12 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
             case nameof(CutSearch):
             case nameof(Gamma):
             case nameof(RightToLeft):
+            case nameof(Sharpen):
+            case nameof(TurnIndex):
+            case nameof(TallBand):
+            case nameof(MergeBands):
+            case nameof(PageBeforeBands):
+            case nameof(AvoidBubbles):
                 Message = null;
                 HasPendingChanges = true;
                 break;
@@ -218,10 +309,16 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
             var pages = await SourcePagesAsync(chapter, ct);
             DetectedStrip = ComicPageProcessor.IsWebtoon(pages);
             OnPropertyChanged(nameof(UsesStrip));
-            var options = new ComicPageOptions(_services.KindleProfile, RightToLeft, Layout);
-            var rendered = await Task.Run(() => ComicPageProcessor.ProcessChapter(pages, options, ct), ct);
+            var options = PreviewOptions();
+            var byScreen = options.EffectiveLayout.UsesPageCuts;
+            var cuts = byScreen ? _services.Library.GetPageCuts(_comic.Id, chapter.Key) : null;
+            var byPage = await Task.Run(() => byScreen
+                ? ComicPageProcessor.ProcessChapterByPage(pages, options, cuts, ct)
+                : [ComicPageProcessor.ProcessChapter(pages, options, ct)], ct);
             ct.ThrowIfCancellationRequested();
-            _rendered = rendered;
+            _rendered = byPage.SelectMany(p => p).ToList();
+            _screenPages = byScreen ? byPage.SelectMany((screens, page) => screens.Select(_ => page)).ToList() : [];
+            var rendered = _rendered;
             PageCount = rendered.Count;
             if (PageIndex > LastPageIndex)
                 PageIndex = LastPageIndex;
@@ -275,14 +372,82 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     private void NextPage() => PageIndex++;
 
     [RelayCommand]
-    private void Save()
+    private async Task SaveAsync()
     {
+        var layout = Layout;
+        if (_comic.SentAt is not null && layout.Mode != _saved.Mode && Confirm is not null
+            && !await Confirm("Trocar o formato de uma obra já enviada",
+                "O número de telas muda e o marcador de leitura no Kindle vai parar em outro ponto do livro. " +
+                "A obra fica marcada para reenviar com o formato novo."))
+            return;
         if (HasPendingChanges)
             ScheduleRender();
-        _services.Library.SetComicLayout(_comic.Id, Layout);
+        if (layout != _saved || RightToLeft != _savedRightToLeft)
+            ClearCache();
+        _services.Library.SetComicLayout(_comic.Id, layout);
+        _saved = layout;
         _services.Library.SetRightToLeft(_comic.Id, RightToLeft);
+        _savedRightToLeft = RightToLeft;
         MessageIsError = false;
         Message = "Ajustes salvos para esta obra. Converter e Enviar já usam o novo enquadramento.";
+    }
+
+    [ObservableProperty]
+    [NotifyCanExecuteChangedFor(nameof(ClearCacheCommand))]
+    private long _cacheBytes;
+
+    public string CacheSize => CacheBytes switch
+    {
+        0 => "Cache vazio. A próxima conversão processa todas as páginas.",
+        < 1_000_000 => $"Cache: {CacheBytes / 1000.0:0} KB de páginas já convertidas.",
+        _ => $"Cache: {CacheBytes / 1_000_000.0:0.0} MB de páginas já convertidas.",
+    };
+
+    partial void OnCacheBytesChanged(long value) => OnPropertyChanged(nameof(CacheSize));
+
+    private void RefreshCacheSize() => CacheBytes = _services.ComicPageCache.SizeOf(_comic.Id);
+
+    private bool HasCache() => CacheBytes > 0;
+
+    [RelayCommand(CanExecute = nameof(HasCache))]
+    private void ClearCache()
+    {
+        try
+        {
+            _services.ComicPageCache.Clear(_comic.Id);
+        }
+        catch (IOException)
+        {
+        }
+        RefreshCacheSize();
+    }
+
+    private bool CanEditCuts() => ShowCutOptions && Chapter is not null && !IsRendering && CutEditor is null;
+
+    [RelayCommand(CanExecute = nameof(CanEditCuts))]
+    private async Task OpenCutEditorAsync()
+    {
+        var chapter = Chapter!;
+        var pages = await SourcePagesAsync(chapter, CancellationToken.None);
+        var options = PreviewOptions();
+        int? start = PageIndex < _screenPages.Count ? _screenPages[PageIndex] : null;
+        var editor = new CutEditorViewModel(_services.Library, _comic.Id, chapter, pages, options, CloseCutEditor);
+        CutEditor = editor;
+        await editor.LoadAsync(start);
+    }
+
+    public void OpenCutEditorFromPreview()
+    {
+        if (OpenCutEditorCommand.CanExecute(null))
+            OpenCutEditorCommand.Execute(null);
+    }
+
+    private void CloseCutEditor()
+    {
+        var changed = CutEditor?.Changed == true;
+        CutEditor = null;
+        if (changed)
+            ScheduleRender();
     }
 
     [RelayCommand]

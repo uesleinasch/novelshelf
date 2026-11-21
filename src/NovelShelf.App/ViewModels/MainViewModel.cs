@@ -15,6 +15,7 @@ public sealed partial class MainViewModel : ViewModelBase
         Downloads = new DownloadsViewModel(services);
         services.Downloads.Updated += Library.OnDownloadsUpdated;
         Kindle.Connected += services.AutoSync.OnKindleConnected;
+        Kindle.WatchAutoSync();
         services.AutoSync.Message += Library.ShowSyncMessage;
         services.AutoSync.LibraryChanged += () => Library.Reload();
         Search = new SearchViewModel(services, OpenInLibrary);

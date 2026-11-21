@@ -133,6 +133,56 @@ internal sealed class Raster(int width, int height, int channels, byte[] data)
         }
     }
 
+    public void AutoLevel(double clip = 0.005)
+    {
+        var histogram = new int[256];
+        for (var y = 0; y < Height; y++)
+            for (var x = 0; x < Width; x++)
+                histogram[Luma(x, y)]++;
+        var cut = (long)(Width * Height * clip);
+        int low = 0, high = 255;
+        for (long seen = 0; low < 255 && (seen += histogram[low]) <= cut; low++) { }
+        for (long seen = 0; high > 0 && (seen += histogram[high]) <= cut; high--) { }
+        if (high - low < 64 || (low == 0 && high == 255))
+            return;
+
+        var table = new byte[256];
+        for (var i = 0; i < 256; i++)
+            table[i] = (byte)Math.Clamp((i - low) * 255 / (high - low), 0, 255);
+        for (var i = 0; i < Data.Length; i++)
+        {
+            if (Channels == 4 && i % 4 == 3)
+                continue;
+            Data[i] = table[Data[i]];
+        }
+    }
+
+    public void Sharpen(double amount = 0.6, int threshold = 4)
+    {
+        var blurred = new byte[Data.Length];
+        var row = new int[Stride];
+        for (var y = 0; y < Height; y++)
+        {
+            int above = Math.Max(0, y - 1) * Stride, here = y * Stride, below = Math.Min(Height - 1, y + 1) * Stride;
+            for (var i = 0; i < Stride; i++)
+                row[i] = Data[above + i] + 2 * Data[here + i] + Data[below + i];
+            for (var x = 0; x < Width; x++)
+            {
+                int left = Math.Max(0, x - 1) * Channels, center = x * Channels, right = Math.Min(Width - 1, x + 1) * Channels;
+                for (var c = 0; c < Channels; c++)
+                    blurred[here + center + c] = (byte)((row[left + c] + 2 * row[center + c] + row[right + c] + 8) / 16);
+            }
+        }
+        for (var i = 0; i < Data.Length; i++)
+        {
+            if (Channels == 4 && i % 4 == 3)
+                continue;
+            var detail = Data[i] - blurred[i];
+            if (Math.Abs(detail) > threshold)
+                Data[i] = Clamp((float)(Data[i] + amount * detail));
+        }
+    }
+
     public byte[] EncodeJpeg(int quality)
     {
         var colorType = Channels == 1 ? SKColorType.Gray8 : SKColorType.Rgba8888;

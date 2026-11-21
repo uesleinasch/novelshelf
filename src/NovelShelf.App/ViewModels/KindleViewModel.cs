@@ -54,6 +54,16 @@ public sealed partial class KindleViewModel(AppServices services, Action openBoo
     [ObservableProperty]
     private string? _syncMessage;
 
+    public string? AutoSyncStatus => services.AutoSync.Status;
+    public bool IsSyncing => services.AutoSync.IsBusy;
+
+    public void WatchAutoSync() => services.AutoSync.StateChanged += () =>
+        Dispatcher.UIThread.Post(() =>
+        {
+            OnPropertyChanged(nameof(AutoSyncStatus));
+            OnPropertyChanged(nameof(IsSyncing));
+        });
+
     private void SaveSetting(Action apply, [System.Runtime.CompilerServices.CallerMemberName] string? property = null)
     {
         apply();
@@ -67,7 +77,7 @@ public sealed partial class KindleViewModel(AppServices services, Action openBoo
         var count = services.AutoSync.StartRound();
         SyncMessage = count == 0
             ? "Nenhuma obra para atualizar. Só entram as obras já baixadas até o último capítulo."
-            : $"Procurando capítulos novos em {count} obras. Acompanhe na página Downloads.";
+            : "Acompanhe cada obra na página Downloads.";
     }
 
     public void StartWatching()

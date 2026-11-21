@@ -160,6 +160,49 @@ public sealed class LibraryStore
                 COMMIT;
                 """);
         }
+
+        if (ScalarLong(db, "PRAGMA user_version") < 8)
+        {
+            Execute(db, """
+                BEGIN;
+                CREATE TABLE IF NOT EXISTS comic_page_cuts (
+                    novel_id INTEGER NOT NULL REFERENCES novels(id) ON DELETE CASCADE,
+                    chapter_key TEXT NOT NULL,
+                    page INTEGER NOT NULL,
+                    cuts TEXT NOT NULL,
+                    PRIMARY KEY (novel_id, chapter_key, page)
+                );
+                PRAGMA user_version = 8;
+                COMMIT;
+                """);
+        }
+    }
+
+    public IReadOnlyDictionary<int, PageCuts> GetPageCuts(long novelId, string chapterKey)
+    {
+        using var db = Open();
+        using var cmd = Command(db, "SELECT page, cuts FROM comic_page_cuts WHERE novel_id = $novel AND chapter_key = $chapter",
+            [("$novel", novelId), ("$chapter", chapterKey)]);
+        using var r = cmd.ExecuteReader();
+        var cuts = new Dictionary<int, PageCuts>();
+        while (r.Read())
+            if (PageCuts.FromJson(r.GetString(1)) is { } page)
+                cuts[r.GetInt32(0)] = page;
+        return cuts;
+    }
+
+    public void SetPageCuts(long novelId, string chapterKey, int page, PageCuts? cuts)
+    {
+        using var db = Open();
+        if (cuts is null)
+            Execute(db, "DELETE FROM comic_page_cuts WHERE novel_id = $novel AND chapter_key = $chapter AND page = $page",
+                ("$novel", novelId), ("$chapter", chapterKey), ("$page", page));
+        else
+            Execute(db, """
+                INSERT INTO comic_page_cuts (novel_id, chapter_key, page, cuts) VALUES ($novel, $chapter, $page, $cuts)
+                ON CONFLICT (novel_id, chapter_key, page) DO UPDATE SET cuts = excluded.cuts
+                """, ("$novel", novelId), ("$chapter", chapterKey), ("$page", page), ("$cuts", cuts.Normalized().ToJson()));
+        Execute(db, "UPDATE novels SET needs_resend = 1 WHERE id = $novel AND sent_at IS NOT NULL", ("$novel", novelId));
     }
 
     public ComicLayout GetComicLayout(long novelId)

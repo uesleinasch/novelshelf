@@ -6,9 +6,18 @@ public sealed record ComicPageOptions(
     KindleProfile Profile,
     bool RightToLeft = false,
     ComicLayout? Layout = null,
-    int JpegQuality = 85)
+    int JpegQuality = 85,
+    ITextRegionDetector? TextDetector = null)
 {
+    // Bump when the same page and settings start producing different screens, or stale cached pages keep being used.
+    public const int PipelineVersion = 2;
+
     public ComicLayout EffectiveLayout => (Layout ?? ComicLayout.Default).Normalized();
+
+    public ITextRegionDetector? Bubbles => EffectiveLayout.AvoidBubbles && EffectiveLayout.UsesPageCuts ? TextDetector : null;
+
+    public string Fingerprint =>
+        $"{PipelineVersion}|{Profile.Width}x{Profile.Height}|{Profile.Color}|{RightToLeft}|{JpegQuality}|{Bubbles?.Id}|{EffectiveLayout.ToJson()}";
 }
 
 public static class ComicPageProcessor
@@ -16,6 +25,7 @@ public static class ComicPageProcessor
     private const double WebtoonAspect = 2.0;
     private const int BackgroundTolerance = 48;
     private const int UniformRowRange = 12;
+    private const double MaxPanelUpscale = 3.0;
 
     private static int Workers => Math.Max(1, Environment.ProcessorCount - 1);
 
@@ -32,35 +42,57 @@ public static class ComicPageProcessor
     public static bool UsesStrip(IReadOnlyList<byte[]> pages, ComicLayout layout) => layout.Mode switch
     {
         ComicReadingMode.Strip => true,
-        ComicReadingMode.Pages => false,
-        _ => IsWebtoon(pages),
+        ComicReadingMode.Auto => IsWebtoon(pages),
+        _ => false,
     };
 
-    public static List<byte[]> ProcessChapter(IReadOnlyList<byte[]> pages, ComicPageOptions options, CancellationToken ct = default)
+    public static List<byte[]> ProcessChapter(IReadOnlyList<byte[]> pages, ComicPageOptions options, CancellationToken ct = default,
+        IReadOnlyDictionary<int, PageCuts>? cuts = null, IConvertedPageStore? cache = null)
     {
         if (UsesStrip(pages, options.EffectiveLayout))
-            return ProcessStrip(pages, options, ct);
-
-        var results = new List<byte[]>[pages.Count];
-        Parallel.For(0, pages.Count, new ParallelOptions { MaxDegreeOfParallelism = Workers, CancellationToken = ct },
-            i => results[i] = ProcessPage(pages[i], options));
-        return results.SelectMany(r => r).ToList();
+            return Cached(cache, "strip", () => ConvertedPageKey.Strip(pages), () => ProcessStrip(pages, options, ct));
+        return ProcessChapterByPage(pages, options, cuts, ct, cache).SelectMany(r => r).ToList();
     }
 
-    public static List<byte[]> ProcessPage(byte[] data, ComicPageOptions options)
+    public static List<byte[]>[] ProcessChapterByPage(IReadOnlyList<byte[]> pages, ComicPageOptions options,
+        IReadOnlyDictionary<int, PageCuts>? cuts = null, CancellationToken ct = default, IConvertedPageStore? cache = null)
+    {
+        var usesCuts = options.EffectiveLayout.UsesPageCuts;
+        var results = new List<byte[]>[pages.Count];
+        Parallel.For(0, pages.Count, new ParallelOptions { MaxDegreeOfParallelism = Workers, CancellationToken = ct }, i =>
+        {
+            var cut = usesCuts ? cuts?.GetValueOrDefault(i) : null;
+            results[i] = Cached(cache, i.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                () => ConvertedPageKey.Page(pages[i], cut), () => ProcessPage(pages[i], options, cut));
+        });
+        return results;
+    }
+
+    private static List<byte[]> Cached(IConvertedPageStore? cache, string slot, Func<byte[]> key, Func<List<byte[]>> convert)
+    {
+        if (cache is null)
+            return convert();
+        var id = key();
+        if (cache.Find(slot, id) is { } hit)
+            return hit;
+        var screens = convert();
+        cache.Save(slot, id, screens);
+        return screens;
+    }
+
+    public static List<byte[]> ProcessPage(byte[] data, ComicPageOptions options, PageCuts? cuts = null)
     {
         var layout = options.EffectiveLayout;
         var source = Raster.Decode(data, options.Profile.Color);
         if (source is null)
             return [];
 
-        var bounds = layout.Margins switch
-        {
-            MarginMode.Auto => ContentBounds(source),
-            MarginMode.Manual => ManualBounds(source.Width, source.Height, layout),
-            _ => new SKRectI(0, 0, source.Width, source.Height),
-        };
+        var bounds = MarginBounds(source, layout);
         var cropped = source.Crop(bounds);
+        if (layout.Mode == ComicReadingMode.Landscape)
+            return ProcessLandscape(cropped, options, ManualRows(cuts, bounds, source.Height));
+        if (layout.Mode == ComicReadingMode.Panels)
+            return ProcessPanels(cropped, options, Grid(cuts, bounds, source.Width, source.Height));
         if (cropped.Width > cropped.Height * 1.05 && layout.WidePages != WidePageMode.Keep)
         {
             if (layout.WidePages == WidePageMode.Rotate)
@@ -73,6 +105,147 @@ public static class ComicPageProcessor
                 : [FitAndEncode(left, options), FitAndEncode(right, options)];
         }
         return [FitAndEncode(cropped, options)];
+    }
+
+    public static PageCut? PlanLandscape(byte[] data, ComicPageOptions options, PageCuts? cuts = null)
+    {
+        var source = Raster.Decode(data, options.Profile.Color);
+        if (source is null)
+            return null;
+        var bounds = MarginBounds(source, options.EffectiveLayout);
+        var plan = PlanLandscapeCut(source.Crop(bounds), options, ManualRows(cuts, bounds, source.Height));
+        return plan with { SourceWidth = source.Width, SourceHeight = source.Height, CropLeft = bounds.Left, CropTop = bounds.Top };
+    }
+
+    public static PageCut? PlanPage(byte[] data, ComicPageOptions options, PageCuts? cuts = null) => options.EffectiveLayout.Mode switch
+    {
+        ComicReadingMode.Landscape => PlanLandscape(data, options, cuts),
+        ComicReadingMode.Panels => PlanPanels(data, options, cuts),
+        _ => null,
+    };
+
+    public static PageCut? PlanPanels(byte[] data, ComicPageOptions options, PageCuts? cuts = null)
+    {
+        var source = Raster.Decode(data, color: false);
+        if (source is null)
+            return null;
+        var bounds = MarginBounds(source, options.EffectiveLayout);
+        var plan = PlanPanelCut(source.Crop(bounds), options, Grid(cuts, bounds, source.Width, source.Height));
+        return plan with { SourceWidth = source.Width, SourceHeight = source.Height, CropLeft = bounds.Left, CropTop = bounds.Top };
+    }
+
+    public static IReadOnlyList<PanelFrame> DetectPanels(byte[] data, ComicPageOptions options)
+    {
+        var source = Raster.Decode(data, color: false);
+        if (source is null)
+            return [];
+        var bounds = MarginBounds(source, options.EffectiveLayout);
+        var layout = PanelDetector.Detect(source.Crop(bounds), options.RightToLeft);
+        return layout.Panels.Select(p => new PanelFrame(
+                (double)(bounds.Left + p.Left) / source.Width, (double)(bounds.Top + p.Top) / source.Height,
+                (double)(bounds.Left + p.Right) / source.Width, (double)(bounds.Top + p.Bottom) / source.Height))
+            .ToList();
+    }
+
+    private static ManualGrid? Grid(PageCuts? cuts, SKRectI bounds, int sourceWidth, int sourceHeight) =>
+        cuts is null || cuts.Rows.Count == 0 && cuts.Columns.Count == 0
+            ? null
+            : new ManualGrid(
+                cuts.Rows.Select(r => (int)Math.Round(r * sourceHeight) - bounds.Top).ToList(),
+                cuts.Columns.Select(c => ((int)Math.Round(c.X * sourceWidth) - bounds.Left, (int)Math.Round(c.Y * sourceHeight) - bounds.Top)).ToList());
+
+    private static IReadOnlyList<int>? ManualRows(PageCuts? cuts, SKRectI bounds, int sourceHeight) =>
+        cuts is null || cuts.Rows.Count == 0 && cuts.Columns.Count == 0
+            ? null
+            : cuts.Rows.Select(r => (int)Math.Round(r * sourceHeight) - bounds.Top).ToList();
+
+    private static SKRectI MarginBounds(Raster source, ComicLayout layout) => layout.Margins switch
+    {
+        MarginMode.Auto => ContentBounds(source),
+        MarginMode.Manual => ManualBounds(source.Width, source.Height, layout),
+        _ => new SKRectI(0, 0, source.Width, source.Height),
+    };
+
+    private static PageCut PlanLandscapeCut(Raster page, ComicPageOptions options, IReadOnlyList<int>? manualRows)
+    {
+        var plan = LandscapeCutter.Plan(page, options.Profile, options.EffectiveLayout, manualRows);
+        if (options.Bubbles is not { } detector || plan.Kind == PageCutKind.Manual)
+            return plan;
+        var screenRows = (double)page.Width * options.Profile.Width / options.Profile.Height;
+        return BubbleGuard.AvoidCuttingBubbles(plan, BubbleGuard.Regions(page, detector), screenRows);
+    }
+
+    private static PageCut PlanPanelCut(Raster page, ComicPageOptions options, ManualGrid? grid)
+    {
+        var plan = PanelCutter.Plan(page, options.RightToLeft, grid);
+        return options.Bubbles is { } detector && plan.Kind == PageCutKind.Panels
+            ? BubbleGuard.IncludeBubbles(plan, BubbleGuard.Regions(page, detector))
+            : plan;
+    }
+
+    public static IReadOnlyList<PanelFrame> DetectTextRegions(byte[] data, ComicPageOptions options)
+    {
+        if (options.TextDetector is not { } detector)
+            return [];
+        var source = Raster.Decode(data, color: false);
+        if (source is null)
+            return [];
+        var bounds = MarginBounds(source, options.EffectiveLayout);
+        return BubbleGuard.Regions(source.Crop(bounds), detector)
+            .Select(p => new PanelFrame(
+                (double)(bounds.Left + p.Left) / source.Width, (double)(bounds.Top + p.Top) / source.Height,
+                (double)(bounds.Left + p.Right) / source.Width, (double)(bounds.Top + p.Bottom) / source.Height))
+            .ToList();
+    }
+
+    private static List<byte[]> ProcessLandscape(Raster page, ComicPageOptions options, IReadOnlyList<int>? manualRows)
+    {
+        var plan = PlanLandscapeCut(page, options, manualRows);
+        var output = new List<byte[]>(plan.Screens.Count + 1);
+        if (options.EffectiveLayout.PageBeforeBands && plan.Screens.Count > 1)
+            output.Add(FitLandscape(page, options));
+        foreach (var screen in plan.Screens)
+            output.Add(FitLandscape(page.Crop(new SKRectI(0, screen.Top, page.Width, screen.Bottom)), options));
+        return output;
+    }
+
+    private static List<byte[]> ProcessPanels(Raster page, ComicPageOptions options, ManualGrid? grid)
+    {
+        var plan = PlanPanelCut(page, options, grid);
+        var output = new List<byte[]>(plan.Panels.Count + 1);
+        if (options.EffectiveLayout.PageBeforeBands && plan.Panels.Count > 1)
+            output.Add(FitAndEncode(page, options));
+        var pad = Math.Max(1, Math.Min(page.Width, page.Height) / 150);
+        foreach (var panel in plan.Panels)
+        {
+            var region = new SKRectI(Math.Max(0, panel.Left - pad), Math.Max(0, panel.Top - pad),
+                Math.Min(page.Width, panel.Right + pad), Math.Min(page.Height, panel.Bottom + pad));
+            output.Add(FitAndEncode(page.Crop(region), options, MaxPanelUpscale));
+        }
+        return output;
+    }
+
+    private static byte[] FitLandscape(Raster region, ComicPageOptions options)
+    {
+        int screenWidth = options.Profile.Height, screenHeight = options.Profile.Width;
+        var scale = Math.Min((double)screenWidth / region.Width, (double)screenHeight / region.Height);
+        var width = Math.Clamp((int)Math.Round(region.Width * scale), 1, screenWidth);
+        var height = Math.Clamp((int)Math.Round(region.Height * scale), 1, screenHeight);
+        var landscape = Raster.Blank(screenWidth, screenHeight, region.Channels);
+        landscape.Paste(region.Resize(width, height), (screenWidth - width) / 2, (screenHeight - height) / 2);
+        var page = landscape.Rotate(counterClockwise: options.EffectiveLayout.Turn == LandscapeTurn.CounterClockwise);
+        return Finish(page, options);
+    }
+
+    private static byte[] Finish(Raster page, ComicPageOptions options)
+    {
+        var layout = options.EffectiveLayout;
+        if (layout.Sharpen)
+            page.AutoLevel();
+        page.ApplyGamma(layout.Gamma);
+        if (layout.Sharpen)
+            page.Sharpen();
+        return page.EncodeJpeg(options.JpegQuality);
     }
 
     public static List<byte[]> ProcessStrip(IReadOnlyList<byte[]> pages, ComicPageOptions options, CancellationToken ct = default)
@@ -162,20 +335,18 @@ public static class ComicPageProcessor
         var profile = options.Profile;
         var page = Raster.Blank(profile.Width, profile.Height, profile.Color ? 4 : 1);
         Buffer.BlockCopy(rows, 0, page.Data, 0, rowCount * page.Stride);
-        page.ApplyGamma(options.EffectiveLayout.Gamma);
-        return page.EncodeJpeg(options.JpegQuality);
+        return Finish(page, options);
     }
 
-    private static byte[] FitAndEncode(Raster source, ComicPageOptions options)
+    private static byte[] FitAndEncode(Raster source, ComicPageOptions options, double maxScale = double.MaxValue)
     {
         var profile = options.Profile;
-        var scale = Math.Min((double)profile.Width / source.Width, (double)profile.Height / source.Height);
+        var scale = Math.Min(maxScale, Math.Min((double)profile.Width / source.Width, (double)profile.Height / source.Height));
         var width = Math.Clamp((int)Math.Round(source.Width * scale), 1, profile.Width);
         var height = Math.Clamp((int)Math.Round(source.Height * scale), 1, profile.Height);
         var page = Raster.Blank(profile.Width, profile.Height, source.Channels);
         page.Paste(source.Resize(width, height), (profile.Width - width) / 2, (profile.Height - height) / 2);
-        page.ApplyGamma(options.EffectiveLayout.Gamma);
-        return page.EncodeJpeg(options.JpegQuality);
+        return Finish(page, options);
     }
 
     private static SKRectI ManualBounds(int width, int height, ComicLayout layout)

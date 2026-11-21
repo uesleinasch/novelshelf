@@ -62,12 +62,17 @@
                 </ui:FASettingsExpanderItem.Footer>
             </ui:FASettingsExpanderItem>
             <ui:FASettingsExpanderItem Content="Enviar ao conectar o Kindle"
-                                       Description="Ao plugar o Kindle, busca capítulos novos e envia todas as obras com novidades. Depois é só ejetar.">
+                                       Description="Ao plugar o Kindle, busca capítulos novos, converte e envia todas as obras com novidades, sem clique. O app nunca ejeta sozinho: no fim, avisa que pode ejetar.">
                 <ui:FASettingsExpanderItem.Footer>
                     <ToggleSwitch IsChecked="{Binding SendOnConnect}" OnContent="Sim" OffContent="Não" />
                 </ui:FASettingsExpanderItem.Footer>
             </ui:FASettingsExpanderItem>
         </ui:FASettingsExpander>
+        <StackPanel Orientation="Horizontal" Spacing="8"
+                    IsVisible="{Binding AutoSyncStatus, Converter={x:Static ObjectConverters.IsNotNull}}">
+            <ui:FAProgressRing IsIndeterminate="True" Width="18" Height="18" IsVisible="{Binding IsSyncing}" />
+            <TextBlock Text="{Binding AutoSyncStatus}" TextWrapping="Wrap" VerticalAlignment="Center" />
+        </StackPanel>
         <TextBlock Text="{Binding SyncMessage}" TextWrapping="Wrap" Opacity="0.8"
                    IsVisible="{Binding SyncMessage, Converter={x:Static ObjectConverters.IsNotNull}}" />
         <ui:FASettingsExpander Header="Estilo dos livros" Description="Recuo, espaço entre parágrafos, alinhamento e título dos capítulos das novels.">

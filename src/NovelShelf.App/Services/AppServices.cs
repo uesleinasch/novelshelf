@@ -1,6 +1,7 @@
 using NovelShelf.Comics;
 using NovelShelf.Core.Books;
 using NovelShelf.Core.Comics;
+using NovelShelf.Vision;
 using NovelShelf.Core.Downloading;
 using NovelShelf.Core.Library;
 using NovelShelf.Core.Net;
@@ -37,7 +38,9 @@ public sealed class AppServices
         var client = new SuwayomiClient(local, () => server.BaseUrl);
         Manga = new MangaBackend(installer, server, client);
         ComicDownloader = new ComicDownloader(Library, client, paths);
-        ComicExporter = new ComicExporter(Library, paths, ComicDownloader);
+        TextModel = new TextModel(Path.Combine(paths.Root, "models"), downloads);
+        ComicExporter = new ComicExporter(Library, paths, ComicDownloader, () => TextModel.Detector);
+        ComicPageCache = new ComicPageCache(paths);
         Covers = new CoverLoader(paths);
         Downloads = new DownloadService(this);
         Delivery = new KindleDelivery(this);
@@ -57,6 +60,8 @@ public sealed class AppServices
     public MangaBackend Manga { get; }
     public ComicDownloader ComicDownloader { get; }
     public ComicExporter ComicExporter { get; }
+    public ComicPageCache ComicPageCache { get; }
+    public TextModel TextModel { get; }
     public CoverLoader Covers { get; }
     public DownloadService Downloads { get; }
     public KindleDelivery Delivery { get; }

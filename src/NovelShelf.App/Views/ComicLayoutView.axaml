@@ -3,6 +3,7 @@
              xmlns:ui="using:FluentAvalonia.UI.Controls"
              xmlns:vm="using:NovelShelf.App.ViewModels"
              xmlns:lib="using:NovelShelf.Core.Library"
+             xmlns:views="using:NovelShelf.App.Views"
              x:Class="NovelShelf.App.Views.ComicLayoutView"
              x:DataType="vm:ComicLayoutViewModel">
     <Grid RowDefinitions="Auto,*" ColumnDefinitions="*,400" Margin="24,16">
@@ -16,12 +17,12 @@
             </StackPanel>
         </Grid>
 
-        <Grid Grid.Row="1" RowDefinitions="*,Auto,Auto">
+        <Grid Grid.Row="1" RowDefinitions="*,Auto,Auto" IsVisible="{Binding !IsEditingCuts}">
             <TextBlock Text="Baixe pelo menos um capítulo para ver o preview." Opacity="0.75" IsVisible="{Binding !HasChapters}" />
             <Border Padding="18" CornerRadius="18" Background="#1f1f1f" HorizontalAlignment="Center" IsVisible="{Binding HasChapters}">
                 <Panel>
                     <Border Background="White">
-                        <Image Source="{Binding Preview}" Stretch="Uniform" />
+                        <Image Source="{Binding Preview}" Stretch="Uniform" PointerPressed="OnPreviewPressed" />
                     </Border>
                     <ui:FAProgressRing IsIndeterminate="True" Width="48" Height="48" IsVisible="{Binding IsRendering}" />
                 </Panel>
@@ -49,6 +50,56 @@
                     IsSnapToTickEnabled="True" TickFrequency="1" IsVisible="{Binding HasChapters}" />
         </Grid>
 
+        <Panel Grid.Row="1" IsVisible="{Binding IsEditingCuts}">
+        <Grid ColumnDefinitions="240,*" RowDefinitions="Auto,*,Auto"
+              DataContext="{Binding CutEditor}" x:DataType="vm:CutEditorViewModel">
+            <Grid.KeyBindings>
+                <KeyBinding Gesture="Left" Command="{Binding PreviousCommand}" />
+                <KeyBinding Gesture="PageUp" Command="{Binding PreviousCommand}" />
+                <KeyBinding Gesture="Right" Command="{Binding NextCommand}" />
+                <KeyBinding Gesture="PageDown" Command="{Binding NextCommand}" />
+                <KeyBinding Gesture="Escape" Command="{Binding CloseCommand}" />
+            </Grid.KeyBindings>
+            <StackPanel Grid.ColumnSpan="2" Spacing="4" Margin="0,0,0,8">
+                <TextBlock Text="{Binding ChapterTitle, StringFormat='Linhas de corte — {0}'}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="Arraste uma linha para mover. Clique duplo cria uma linha horizontal; Shift + clique duplo cria uma vertical. Clique numa linha e Delete apaga. ← → ou PgUp PgDn trocam de página. Esc fecha."
+                           FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+            </StackPanel>
+            <DockPanel Grid.Row="1" Grid.RowSpan="2" Margin="0,0,12,0">
+                <TextBlock DockPanel.Dock="Top" Text="{Binding Summary}" FontSize="12" Opacity="0.8" TextWrapping="Wrap" Margin="0,0,0,6" />
+                <ToggleSwitch DockPanel.Dock="Top" IsChecked="{Binding OnlySuspect}" OnContent="Só suspeitas e editadas" OffContent="Todas as páginas" />
+                <ToggleSwitch DockPanel.Dock="Top" IsChecked="{Binding ShowPanels}" OnContent="Mostrar quadros detectados" OffContent="Esconder quadros"
+                              ToolTip.Tip="Contorno verde em cada quadro achado, numerado na ordem de leitura; tracejado laranja nos balões achados pela IA" />
+                <ui:FAProgressRing DockPanel.Dock="Top" IsIndeterminate="True" Width="32" Height="32" IsVisible="{Binding IsLoading}" />
+                <ListBox ItemsSource="{Binding Visible}" SelectedItem="{Binding Selected}" Background="Transparent">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate x:DataType="vm:CutPageItem">
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="{Binding Label}" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding Detail}" FontSize="12" Opacity="0.75" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </DockPanel>
+            <Border Grid.Row="1" Grid.Column="1" Padding="8" CornerRadius="8" Background="#1f1f1f">
+                <views:CutCanvas Source="{Binding Source}" Cuts="{Binding Cuts}" Panels="{Binding ShownPanels}" Bubbles="{Binding ShownBubbles}" />
+            </Border>
+            <Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,12,0,0">
+                <Button Command="{Binding PreviousCommand}" ToolTip.Tip="Página anterior da lista">
+                    <ui:FASymbolIcon Symbol="Back" />
+                </Button>
+                <TextBlock Grid.Column="1" Text="{Binding PageTitle}" VerticalAlignment="Center" Margin="12,0" TextTrimming="CharacterEllipsis" />
+                <Button Grid.Column="2" Command="{Binding NextCommand}" ToolTip.Tip="Próxima página da lista" Margin="0,0,12,0">
+                    <ui:FASymbolIcon Symbol="Forward" />
+                </Button>
+                <Button Grid.Column="3" Content="Voltar à detecção" Command="{Binding ResetPageCommand}" Margin="0,0,8,0"
+                        ToolTip.Tip="Apaga as linhas manuais desta página" />
+                <Button Grid.Column="4" Classes="accent" Content="Fechar editor" Command="{Binding CloseCommand}" />
+            </Grid>
+        </Grid>
+        </Panel>
+
         <ScrollViewer Grid.Row="1" Grid.Column="1" Margin="20,0,0,0">
             <StackPanel Spacing="18">
                 <TextBlock TextWrapping="Wrap" Opacity="0.75">
@@ -70,6 +121,8 @@
                         <ComboBoxItem Content="Automático" />
                         <ComboBoxItem Content="Páginas (mangá, HQ)" />
                         <ComboBoxItem Content="Tira contínua (webtoon)" />
+                        <ComboBoxItem Content="Faixas deitadas (ler com o Kindle deitado)" />
+                        <ComboBoxItem Content="Quadro a quadro (ler com o Kindle em pé)" />
                     </ComboBox>
                     <TextBlock Text="{Binding DetectedLabel}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
                 </StackPanel>
@@ -90,7 +143,7 @@
                         <Slider Minimum="0" Maximum="40" Value="{Binding MarginLeft}" TickFrequency="1" IsSnapToTickEnabled="True" />
                         <TextBlock Text="{Binding MarginRight, StringFormat='Direita: {0:0}%'}" FontSize="12" />
                         <Slider Minimum="0" Maximum="40" Value="{Binding MarginRight}" TickFrequency="1" IsSnapToTickEnabled="True" />
-                        <StackPanel Spacing="4" IsVisible="{Binding ShowPageOptions}">
+                        <StackPanel Spacing="4" IsVisible="{Binding ShowVerticalMargins}">
                             <TextBlock Text="{Binding MarginTop, StringFormat='Topo: {0:0}%'}" FontSize="12" />
                             <Slider Minimum="0" Maximum="40" Value="{Binding MarginTop}" TickFrequency="1" IsSnapToTickEnabled="True" />
                             <TextBlock Text="{Binding MarginBottom, StringFormat='Base: {0:0}%'}" FontSize="12" />
@@ -122,11 +175,64 @@
                                FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
                 </StackPanel>
 
+                <StackPanel Spacing="6" IsVisible="{Binding ShowLandscapeOptions}">
+                    <TextBlock Text="Faixas deitadas" FontWeight="SemiBold" />
+                    <TextBlock Text="Cada faixa de quadros vira uma tela deitada, cortada nos espaços em branco ou pretos entre os quadros. O livro continua em pé: a imagem já vai girada."
+                               FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                    <ComboBox SelectedIndex="{Binding TurnIndex}" HorizontalAlignment="Stretch" Margin="0,4,0,0">
+                        <ComboBoxItem Content="Girar no sentido horário (Kindle virado para a esquerda)" />
+                        <ComboBoxItem Content="Girar no sentido anti-horário (Kindle virado para a direita)" />
+                    </ComboBox>
+                    <TextBlock Text="{Binding MergeBands, StringFormat='Juntar faixas baixas até: {0:0}% da tela'}" FontSize="12" Margin="0,8,0,0" />
+                    <Slider Minimum="0" Maximum="100" Value="{Binding MergeBands}" TickFrequency="5" IsSnapToTickEnabled="True" />
+                    <TextBlock Text="Duas faixas vizinhas dividem uma tela enquanto cabem nesse tamanho. 0 deixa cada faixa na sua tela."
+                               FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding TallBand, StringFormat='Cortar faixa mais alta que: {0:0}% da tela'}" FontSize="12" Margin="0,8,0,0" />
+                    <Slider Minimum="100" Maximum="250" Value="{Binding TallBand}" TickFrequency="5" IsSnapToTickEnabled="True" />
+                    <TextBlock Text="Faixa maior que isso vai em pedaços. Página sem espaço entre quadros também vai em pedaços iguais; página de um quadro só vai inteira."
+                               FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Overlap, StringFormat='Repetir entre pedaços: {0:0}%'}" FontSize="12" Margin="0,8,0,0" />
+                    <Slider Minimum="0" Maximum="40" Value="{Binding Overlap}" TickFrequency="1" IsSnapToTickEnabled="True" />
+                </StackPanel>
+
+                <StackPanel Spacing="6" IsVisible="{Binding ShowPanelOptions}">
+                    <TextBlock Text="Quadro a quadro" FontWeight="SemiBold" />
+                    <TextBlock Text="Cada quadro vira uma tela, na ordem de leitura, com o Kindle em pé. A letra fica bem maior, mas a página rende mais telas. Quadro pequeno é ampliado no máximo 3 vezes para não borrar."
+                               FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel Spacing="6" IsVisible="{Binding ShowCutOptions}">
+                    <ToggleSwitch IsChecked="{Binding PageBeforeBands}"
+                                  OnContent="Mostrar a página inteira antes dos pedaços" OffContent="Só os pedaços" />
+                    <ToggleSwitch IsChecked="{Binding AvoidBubbles}"
+                                  OnContent="Não cortar balões de fala (IA local)" OffContent="Cortar sem olhar os balões" />
+                    <TextBlock FontSize="12" Opacity="0.7" TextWrapping="Wrap"
+                               Text="{Binding BubbleModelSize, StringFormat='Um modelo de IA acha os balões e o texto para o corte desviar deles. Roda no seu computador; na primeira vez baixa {0} (licença Apache-2.0).'}" />
+                    <TextBlock Text="{Binding ModelStatus}" FontSize="12" TextWrapping="Wrap"
+                               IsVisible="{Binding ModelStatus, Converter={x:Static ObjectConverters.IsNotNull}}" />
+                    <Button Content="Editar linhas de corte" Command="{Binding OpenCutEditorCommand}"
+                            ToolTip.Tip="Abre as páginas suspeitas deste capítulo. Clicar no preview abre a página da tela mostrada." />
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <ToggleSwitch IsChecked="{Binding Sharpen}" OnContent="Nitidez e contraste para e-ink" OffContent="Sem nitidez extra" />
+                    <TextBlock Text="Estica o preto e o branco da página e reforça os traços. Ajuda letras pequenas na tela do Kindle."
+                               FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                </StackPanel>
+
                 <StackPanel Spacing="6">
                     <TextBlock Text="{Binding Gamma, StringFormat='Tons médios: {0:0.00}'}" FontWeight="SemiBold" />
                     <Slider Minimum="0.4" Maximum="2.5" Value="{Binding Gamma}" TickFrequency="0.05" IsSnapToTickEnabled="True" />
                     <TextBlock Text="Abaixo de 1 clareia, acima de 1 escurece. Telas e-ink costumam ficar melhores entre 1,2 e 1,6."
                                FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                </StackPanel>
+
+                <StackPanel Spacing="6">
+                    <TextBlock Text="Páginas convertidas" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding CacheSize}" FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                    <TextBlock Text="Converter e Enviar reaproveitam as páginas que já foram convertidas e só processam o que é novo. Mudar os ajustes ou o modelo do Kindle limpa o cache."
+                               FontSize="12" Opacity="0.7" TextWrapping="Wrap" />
+                    <Button Content="Limpar cache" Command="{Binding ClearCacheCommand}" />
                 </StackPanel>
 
                 <ui:FAInfoBar Title="Ajustes" Message="{Binding Message}" IsClosable="False"

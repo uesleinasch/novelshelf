@@ -24,6 +24,7 @@
     <ProjectReference Include="..\..\src\NovelShelf.Devices\NovelShelf.Devices.csproj" />
     <ProjectReference Include="..\..\src\NovelShelf.Suwayomi\NovelShelf.Suwayomi.csproj" />
     <ProjectReference Include="..\..\src\NovelShelf.Sources.Illusia\NovelShelf.Sources.Illusia.csproj" />
+    <ProjectReference Include="..\..\src\NovelShelf.Vision\NovelShelf.Vision.csproj" />
   </ItemGroup>
 
 </Project>

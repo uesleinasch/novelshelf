@@ -26,6 +26,15 @@ public sealed class AutoSyncService
     public event Action? StateChanged;
 
     public bool IsBusy => _round is not null || _sending;
+    public string? Status { get; private set; }
+
+    private void SetStatus(string? status)
+    {
+        Status = status;
+        StateChanged?.Invoke();
+    }
+
+    private static string Now => DateTime.Now.ToString("HH:mm", System.Globalization.CultureInfo.InvariantCulture);
 
     public static IReadOnlyList<int> IntervalOptions { get; } = [0, 1, 3, 6, 12, 24];
 
@@ -57,7 +66,8 @@ public sealed class AutoSyncService
         foreach (var work in candidates)
             _services.Downloads.Enqueue(work, AutoSync.UpdateBatch);
         _round = new UpdateRound(candidates.Select(c => c.Id).ToList());
-        StateChanged?.Invoke();
+        SetStatus((candidates.Count == 1 ? "Buscando capítulos novos em 1 obra." : $"Buscando capítulos novos em {candidates.Count} obras.")
+            + (_sendWhenDone is { } device ? $" Depois envia ao {device.Name}." : ""));
         return candidates.Count;
     }
 
@@ -66,7 +76,9 @@ public sealed class AutoSyncService
         if (!_services.Settings.SendOnConnect)
             return;
         _sendWhenDone = device;
-        if (_round is null && StartRound() == 0)
+        if (_round is not null)
+            SetStatus($"{device.Name} conectado. Envia quando a busca por capítulos novos terminar.");
+        else if (StartRound() == 0)
             _ = SendPendingAsync();
     }
 
@@ -80,7 +92,13 @@ public sealed class AutoSyncService
         var results = _round.Results(jobs);
         var failures = _round.Failures(jobs);
         _round = null;
-        StateChanged?.Invoke();
+        var found = results.Sum(r => r.NewChapters);
+        SetStatus(found switch
+        {
+            0 => $"Busca terminou às {Now}: nenhum capítulo novo.",
+            1 => $"Busca terminou às {Now}: 1 capítulo novo.",
+            _ => $"Busca terminou às {Now}: {found} capítulos novos.",
+        });
 
         if (results.Count > 0)
         {
@@ -100,20 +118,29 @@ public sealed class AutoSyncService
     {
         var device = _sendWhenDone;
         _sendWhenDone = null;
-        if (device is null || _sending || !Directory.Exists(device.DocumentsPath))
+        if (device is null || _sending)
             return;
+        if (!Directory.Exists(device.DocumentsPath))
+        {
+            SetStatus($"O {device.Name} foi desconectado antes do envio.");
+            return;
+        }
         var pending = AutoSync.PendingForKindle(_services.Library.GetNovels());
         if (pending.Count == 0)
+        {
+            SetStatus($"Nada novo para enviar ao {device.Name} ({Now}).");
             return;
+        }
 
         _sending = true;
-        StateChanged?.Invoke();
         var sent = new List<string>();
         var errors = new List<string>();
         try
         {
-            foreach (var work in pending)
+            for (var i = 0; i < pending.Count; i++)
             {
+                var work = pending[i];
+                SetStatus($"Convertendo e enviando {i + 1} de {pending.Count} ao {device.Name}: {work.Title}");
                 try
                 {
                     await _services.Delivery.SendAsync(device, work);
@@ -128,13 +155,15 @@ public sealed class AutoSyncService
         finally
         {
             _sending = false;
-            StateChanged?.Invoke();
             LibraryChanged?.Invoke();
         }
 
+        var title = sent.Count == 1 ? "1 obra enviada, pode ejetar" : $"{sent.Count} obras enviadas, pode ejetar";
+        SetStatus(sent.Count == 0
+            ? $"Nenhuma obra foi enviada ao {device.Name} ({Now})."
+            : $"{title} o {device.Name} ({Now})." + (errors.Count > 0 ? $" {errors.Count} com erro." : ""));
         if (sent.Count > 0)
-            Notify(new SyncMessage(
-                sent.Count == 1 ? "1 livro atualizado no Kindle" : $"{sent.Count} livros atualizados no Kindle",
+            Notify(new SyncMessage(title,
                 $"{string.Join(", ", sent)}. Ejete o {device.Name} para ele atualizar a biblioteca."));
         if (errors.Count > 0)
             Message?.Invoke(new SyncMessage("Falha ao enviar ao Kindle", string.Join("; ", errors), IsError: true));
