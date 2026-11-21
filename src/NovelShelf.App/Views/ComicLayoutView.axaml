@@ -68,6 +68,8 @@
             <DockPanel Grid.Row="1" Grid.RowSpan="2" Margin="0,0,12,0">
                 <TextBlock DockPanel.Dock="Top" Text="{Binding Summary}" FontSize="12" Opacity="0.8" TextWrapping="Wrap" Margin="0,0,0,6" />
                 <ToggleSwitch DockPanel.Dock="Top" IsChecked="{Binding OnlySuspect}" OnContent="Só suspeitas e editadas" OffContent="Todas as páginas" />
+                <ToggleSwitch DockPanel.Dock="Top" IsChecked="{Binding ShowPanels}" OnContent="Mostrar quadros detectados" OffContent="Esconder quadros"
+                              ToolTip.Tip="Contorno verde em cada quadro achado, numerado na ordem de leitura" />
                 <ui:FAProgressRing DockPanel.Dock="Top" IsIndeterminate="True" Width="32" Height="32" IsVisible="{Binding IsLoading}" />
                 <ListBox ItemsSource="{Binding Visible}" SelectedItem="{Binding Selected}" Background="Transparent">
                     <ListBox.ItemTemplate>
@@ -81,7 +83,7 @@
                 </ListBox>
             </DockPanel>
             <Border Grid.Row="1" Grid.Column="1" Padding="8" CornerRadius="8" Background="#1f1f1f">
-                <views:CutCanvas Source="{Binding Source}" Cuts="{Binding Cuts}" />
+                <views:CutCanvas Source="{Binding Source}" Cuts="{Binding Cuts}" Panels="{Binding ShownPanels}" />
             </Border>
             <Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="Auto,*,Auto,Auto,Auto" Margin="0,12,0,0">
                 <Button Command="{Binding PreviousCommand}" ToolTip.Tip="Página anterior da lista">

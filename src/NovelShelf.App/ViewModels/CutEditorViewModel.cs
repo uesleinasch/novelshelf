@@ -24,6 +24,8 @@ public sealed partial class CutPageItem(int index, PageCut plan, bool isManual) 
 
     public string Detail => IsManual
         ? $"linhas manuais · {Screens(Plan.Screens.Count)}"
+        : Plan.Kind == PageCutKind.PanelRows && !Plan.IsSuspect
+            ? $"linhas de quadros · {Screens(Plan.Screens.Count)}"
         : Plan.IsSuspect
             ? $"{Describe(Plan.Suspicion)} · confiança {Plan.Confidence:P0}"
             : Screens(Plan.Screens.Count);
@@ -89,6 +91,16 @@ public sealed partial class CutEditorViewModel : ViewModelBase
     [ObservableProperty]
     private string? _summary;
 
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShownPanels))]
+    private bool _showPanels = true;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShownPanels))]
+    private IReadOnlyList<PanelFrame>? _panels;
+
+    public IReadOnlyList<PanelFrame>? ShownPanels => ShowPanels ? Panels : null;
+
     public string PageTitle => Selected is { } item ? $"{item.Label} de {_pages.Count} — {item.Detail}" : "";
 
     public async Task LoadAsync(int? startPage)
@@ -134,12 +146,14 @@ public sealed partial class CutEditorViewModel : ViewModelBase
         _showingPage = true;
         try
         {
+            Panels = null;
             if (value is null)
             {
                 Source = null;
                 Cuts = null;
                 return;
             }
+            _ = DetectPanelsAsync(value);
             using (var stream = new MemoryStream(_pages[value.Index]))
                 Source = new Bitmap(stream);
             Cuts = value.IsManual
@@ -160,6 +174,14 @@ public sealed partial class CutEditorViewModel : ViewModelBase
         Changed = true;
         item.IsManual = true;
         _ = ReplanAsync(item, value);
+    }
+
+    private async Task DetectPanelsAsync(CutPageItem item)
+    {
+        var page = _pages[item.Index];
+        var panels = await Task.Run(() => ComicPageProcessor.DetectPanels(page, _options));
+        if (ReferenceEquals(Selected, item))
+            Panels = panels;
     }
 
     private async Task ReplanAsync(CutPageItem item, PageCuts? cuts)

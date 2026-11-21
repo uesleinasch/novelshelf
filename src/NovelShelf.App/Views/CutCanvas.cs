@@ -18,6 +18,11 @@ public sealed class CutCanvas : Control
     public static readonly StyledProperty<PageCuts?> CutsProperty =
         AvaloniaProperty.Register<CutCanvas, PageCuts?>(nameof(Cuts), defaultBindingMode: BindingMode.TwoWay);
 
+    public static readonly StyledProperty<IReadOnlyList<PanelFrame>?> PanelsProperty =
+        AvaloniaProperty.Register<CutCanvas, IReadOnlyList<PanelFrame>?>(nameof(Panels));
+
+    private static readonly IPen PanelPen = new Pen(new SolidColorBrush(Color.FromArgb(0xc0, 0x16, 0xa3, 0x4a)), 2);
+    private static readonly IBrush PanelLabel = new SolidColorBrush(Color.FromRgb(0x16, 0xa3, 0x4a));
     private static readonly IPen RowPen = new Pen(new SolidColorBrush(Color.FromRgb(0xe1, 0x1d, 0x48)), 2);
     private static readonly IPen ColumnPen = new Pen(new SolidColorBrush(Color.FromRgb(0x25, 0x63, 0xeb)), 2);
     private static readonly IPen SelectedPen = new Pen(new SolidColorBrush(Color.FromRgb(0xf5, 0x9e, 0x0b)), 4);
@@ -29,7 +34,7 @@ public sealed class CutCanvas : Control
 
     static CutCanvas()
     {
-        AffectsRender<CutCanvas>(SourceProperty, CutsProperty);
+        AffectsRender<CutCanvas>(SourceProperty, CutsProperty, PanelsProperty);
         FocusableProperty.OverrideDefaultValue<CutCanvas>(true);
     }
 
@@ -43,6 +48,12 @@ public sealed class CutCanvas : Control
     {
         get => GetValue(CutsProperty);
         set => SetValue(CutsProperty, value);
+    }
+
+    public IReadOnlyList<PanelFrame>? Panels
+    {
+        get => GetValue(PanelsProperty);
+        set => SetValue(PanelsProperty, value);
     }
 
     protected override void OnPropertyChanged(AvaloniaPropertyChangedEventArgs change)
@@ -82,6 +93,7 @@ public sealed class CutCanvas : Control
         if (Source is null || area.Width <= 0)
             return;
         context.DrawImage(Source, new Rect(Source.Size), area);
+        DrawPanels(context, area);
 
         for (var i = 0; i < _rows.Count; i++)
         {
@@ -94,6 +106,25 @@ public sealed class CutCanvas : Control
             var x = area.Left + _columns[i].X * area.Width;
             context.DrawLine(_selected == (false, i) ? SelectedPen : ColumnPen,
                 new Point(x, area.Top + top * area.Height), new Point(x, area.Top + bottom * area.Height));
+        }
+    }
+
+    private void DrawPanels(DrawingContext context, Rect area)
+    {
+        if (Panels is not { Count: > 0 } panels)
+            return;
+        for (var i = 0; i < panels.Count; i++)
+        {
+            var panel = panels[i];
+            var box = new Rect(
+                new Point(area.Left + panel.Left * area.Width, area.Top + panel.Top * area.Height),
+                new Point(area.Left + panel.Right * area.Width, area.Top + panel.Bottom * area.Height)).Deflate(2);
+            context.DrawRectangle(null, PanelPen, box);
+            var label = new FormattedText((i + 1).ToString(System.Globalization.CultureInfo.InvariantCulture),
+                System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight, Typeface.Default, 14, Brushes.White);
+            var badge = new Rect(box.Left, box.Top, label.Width + 10, label.Height + 4);
+            context.DrawRectangle(PanelLabel, null, badge);
+            context.DrawText(label, new Point(badge.Left + 5, badge.Top + 2));
         }
     }
 
