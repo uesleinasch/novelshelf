@@ -160,9 +160,13 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
     private bool _avoidBubbles;
 
     [ObservableProperty]
+    private bool _aiPanels;
+
+    [ObservableProperty]
     private string? _modelStatus;
 
     public string BubbleModelSize => $"{NovelShelf.Vision.TextModel.Size / 1_000_000.0:0} MB";
+    public string PanelModelSize => $"{NovelShelf.Vision.PanelModel.Size / 1_000_000.0:0} MB";
 
     partial void OnAvoidBubblesChanged(bool value)
     {
@@ -170,27 +174,40 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
             _ = InstallBubbleModelAsync();
     }
 
-    private async Task InstallBubbleModelAsync()
+    partial void OnAiPanelsChanged(bool value)
+    {
+        if (value && !_loading && !_services.PanelModel.IsInstalled)
+            _ = InstallPanelModelAsync();
+    }
+
+    private Task InstallBubbleModelAsync() =>
+        InstallModelAsync("balões", p => _services.TextModel.InstallAsync(p), () => AvoidBubbles = false);
+
+    private Task InstallPanelModelAsync() =>
+        InstallModelAsync("quadros", p => _services.PanelModel.InstallAsync(p), () => AiPanels = false);
+
+    private async Task InstallModelAsync(string name, Func<IProgress<NovelShelf.Vision.ModelProgress>, Task> install, Action turnOff)
     {
         try
         {
-            ModelStatus = "Baixando o modelo de balões...";
-            await _services.TextModel.InstallAsync(new Progress<NovelShelf.Vision.ModelProgress>(p =>
-                ModelStatus = $"Baixando o modelo de balões: {p.Done / 1_000_000.0:0.0} de {p.Total / 1_000_000.0:0.0} MB"));
+            ModelStatus = $"Baixando o modelo de {name}...";
+            await install(new Progress<NovelShelf.Vision.ModelProgress>(p =>
+                ModelStatus = $"Baixando o modelo de {name}: {p.Done / 1_000_000.0:0.0} de {p.Total / 1_000_000.0:0.0} MB"));
             ModelStatus = null;
             HasPendingChanges = true;
         }
         catch (Exception e) when (e is HttpRequestException or IOException or InvalidOperationException or TaskCanceledException)
         {
             ModelStatus = null;
-            AvoidBubbles = false;
+            turnOff();
             MessageIsError = true;
-            Message = $"Não deu para baixar o modelo de balões: {e.Message}";
+            Message = $"Não deu para baixar o modelo de {name}: {e.Message}";
         }
     }
 
     private ComicPageOptions PreviewOptions() =>
-        new(_services.KindleProfile, RightToLeft, Layout, TextDetector: _services.TextModel.Detector);
+        new(_services.KindleProfile, RightToLeft, Layout, TextDetector: _services.TextModel.Detector,
+            PanelModel: _services.PanelModel.Detector);
 
     public Func<string, string, Task<bool>>? Confirm { get; set; }
 
@@ -226,6 +243,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
         MergeBands = MergeBands / 100,
         PageBeforeBands = PageBeforeBands,
         AvoidBubbles = AvoidBubbles,
+        AiPanels = AiPanels,
     }.Normalized();
 
     private void Load(ComicLayout layout)
@@ -246,6 +264,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
         MergeBands = Math.Round(layout.MergeBands * 100);
         PageBeforeBands = layout.PageBeforeBands;
         AvoidBubbles = layout.AvoidBubbles;
+        AiPanels = layout.AiPanels;
     }
 
     protected override void OnPropertyChanged(System.ComponentModel.PropertyChangedEventArgs e)
@@ -275,6 +294,7 @@ public sealed partial class ComicLayoutViewModel : ViewModelBase
             case nameof(MergeBands):
             case nameof(PageBeforeBands):
             case nameof(AvoidBubbles):
+            case nameof(AiPanels):
                 Message = null;
                 HasPendingChanges = true;
                 break;

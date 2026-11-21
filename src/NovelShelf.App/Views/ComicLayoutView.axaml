@@ -208,6 +208,10 @@
                                   OnContent="Não cortar balões de fala (IA local)" OffContent="Cortar sem olhar os balões" />
                     <TextBlock FontSize="12" Opacity="0.7" TextWrapping="Wrap"
                                Text="{Binding BubbleModelSize, StringFormat='Um modelo de IA acha os balões e o texto para o corte desviar deles. Roda no seu computador; na primeira vez baixa {0} (licença Apache-2.0).'}" />
+                    <ToggleSwitch IsChecked="{Binding AiPanels}"
+                                  OnContent="Achar quadros com IA local" OffContent="Achar quadros pelas calhas" />
+                    <TextBlock FontSize="12" Opacity="0.7" TextWrapping="Wrap"
+                               Text="{Binding PanelModelSize, StringFormat='Um modelo de IA acha os quadros mesmo sem calha branca, colados ou de borda escura. Se ele não achar nada, volta para as calhas. Roda no seu computador; na primeira vez baixa {0} (licença Apache-2.0).'}" />
                     <TextBlock Text="{Binding ModelStatus}" FontSize="12" TextWrapping="Wrap"
                                IsVisible="{Binding ModelStatus, Converter={x:Static ObjectConverters.IsNotNull}}" />
                     <Button Content="Editar linhas de corte" Command="{Binding OpenCutEditorCommand}"
