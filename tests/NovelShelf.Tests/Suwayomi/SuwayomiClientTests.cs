@@ -1,6 +1,8 @@
 using System.Formats.Tar;
 using System.IO.Compression;
 using System.Net;
+using System.Net.Sockets;
+using System.Net.WebSockets;
 using System.Text;
 using System.Text.Json.Nodes;
 using NovelShelf.Core.Comics;
@@ -151,6 +153,121 @@ public sealed class SuwayomiClientTests
         Assert.Equal(["A", "B"], extensions.Select(e => e.Name));
         Assert.Equal(ContentWarning.Nsfw, extensions[1].ContentWarning);
         Assert.Equal(new Uri(Base, "api/v1/extension/icon/b"), extensions[1].IconUrl);
+    }
+
+    [Fact]
+    public async Task Sources_carry_the_site_address_for_the_login()
+    {
+        var (client, _) = Client(_ => """
+            {"data":{"sources":{"nodes":[
+              {"id":"9","name":"Site","displayName":"Site (PT-BR)","lang":"pt-BR","contentWarning":"SAFE","supportsLatest":true,"iconUrl":null,"homeUrl":"https://site.example/"},
+              {"id":"8","name":"Local","displayName":"Local","lang":"localsourcelang","contentWarning":"SAFE","supportsLatest":false,"iconUrl":null,"homeUrl":""}]}}}
+            """);
+
+        var sources = await client.GetSourcesAsync(Ct);
+
+        Assert.Equal(new Uri("https://site.example/"), sources.Single(s => s.Id == "9").HomeUrl);
+        Assert.Null(sources.Single(s => s.Id == "8").HomeUrl);
+    }
+
+    [Fact]
+    public async Task Web_view_is_turned_on_and_opened_only_after_it_answers()
+    {
+        var port = FreePort();
+        var root = new Uri($"http://127.0.0.1:{port}/");
+        using var listener = new HttpListener();
+        listener.Prefixes.Add(root.AbsoluteUri);
+        listener.Start();
+        var graph = new List<string>();
+        var probes = new List<string>();
+        var server = Task.Run(async () =>
+        {
+            while (true)
+            {
+                var context = await listener.GetContextAsync();
+                if (!context.Request.IsWebSocketRequest)
+                {
+                    using (var reader = new StreamReader(context.Request.InputStream))
+                        graph.Add(await reader.ReadToEndAsync(Ct));
+                    var reply = """{"data":{"setSettings":{"settings":{"kcefEnabled":true}}}}"""u8.ToArray();
+                    context.Response.ContentType = "application/json";
+                    await context.Response.OutputStream.WriteAsync(reply, Ct);
+                    context.Response.Close();
+                    continue;
+                }
+                var socket = (await context.AcceptWebSocketAsync(null)).WebSocket;
+                var buffer = new byte[4096];
+                var request = await socket.ReceiveAsync(buffer, Ct);
+                probes.Add(Encoding.UTF8.GetString(buffer, 0, request.Count));
+                if (probes.Count == 1)
+                {
+                    await socket.CloseOutputAsync(WebSocketCloseStatus.InternalServerError, "CEF is disabled", Ct);
+                    continue;
+                }
+                await socket.SendAsync("""{"type":"statusChange","message":""}"""u8.ToArray(), WebSocketMessageType.Text, true, Ct);
+                return;
+            }
+        }, Ct);
+        var client = new SuwayomiClient(new HttpClient(), () => root) { WebViewRetryDelay = TimeSpan.Zero };
+
+        var page = await client.PrepareWebViewAsync(new Uri("https://site.example/entrar?x=1"), Ct);
+
+        await server;
+        Assert.Contains("kcefEnabled: true", Assert.Single(graph));
+        Assert.Equal(2, probes.Count);
+        Assert.Contains("https://site.example/entrar?x=1", probes[1]);
+        Assert.Equal(new Uri(root, "api/v1/webview#https%3A%2F%2Fsite.example%2Fentrar%3Fx%3D1"), page);
+    }
+
+    [Fact]
+    public async Task Source_preferences_keep_their_server_position_and_skip_hidden_ones()
+    {
+        var (client, handler) = Client(_ => """
+            {"data":{"source":{"preferences":[
+              {"__typename":"EditTextPreference","key":"email","title":"Email","summary":"","visible":true,"enabled":true,"text":null},
+              {"__typename":"SwitchPreference","key":"oculta","title":"Oculta","summary":null,"visible":false,"enabled":true,"on":true},
+              {"__typename":"ListPreference","key":"lang","title":"Idioma","summary":"Qual idioma","visible":true,"enabled":true,"choice":"pt","entries":["Português","Inglês"],"entryValues":["pt","en"]},
+              {"__typename":"MultiSelectListPreference","key":"rating","title":"Classificação","summary":null,"visible":true,"enabled":false,"choices":["safe"],"entries":["Livre"],"entryValues":["safe"]}]}}}
+            """);
+
+        var preferences = await client.GetSourcePreferencesAsync("42", Ct);
+
+        Assert.Equal("42", (string?)handler.Requests.Single()["variables"]!["id"]);
+        Assert.Equal([0, 2, 3], preferences.Select(p => p.Position));
+        Assert.Equal(SourcePreferenceKind.Text, preferences[0].Kind);
+        Assert.Null(preferences[0].Summary);
+        Assert.Equal(["pt"], preferences[1].Selected);
+        Assert.Equal(new SourceChoice("Inglês", "en"), preferences[1].Choices[1]);
+        Assert.False(preferences[2].Enabled);
+        Assert.Equal(["safe"], preferences[2].Selected);
+    }
+
+    [Theory]
+    [InlineData(SourcePreferenceKind.Text, "editTextState", "\"segredo\"")]
+    [InlineData(SourcePreferenceKind.Switch, "switchState", "true")]
+    [InlineData(SourcePreferenceKind.CheckBox, "checkBoxState", "true")]
+    [InlineData(SourcePreferenceKind.List, "listState", "\"en\"")]
+    [InlineData(SourcePreferenceKind.MultiList, "multiSelectState", "[\"en\"]")]
+    public async Task Source_preference_change_goes_to_the_field_of_its_kind(SourcePreferenceKind kind, string field, string json)
+    {
+        var (client, handler) = Client(_ => """{"data":{"updateSourcePreference":{"clientMutationId":null}}}""");
+        var preference = new SourcePreference(5, kind, "k", "Título", null, true, "segredo", true, [new SourceChoice("Inglês", "en")], ["en"]);
+
+        await client.SetSourcePreferenceAsync("42", preference, Ct);
+
+        var variables = handler.Requests.Single()["variables"]!;
+        Assert.Equal("42", (string?)variables["source"]);
+        var change = variables["change"]!.AsObject();
+        Assert.Equal(5, (int?)change["position"]);
+        Assert.Equal(json, change[field]!.ToJsonString());
+        Assert.Equal(2, change.Count);
+    }
+
+    private static int FreePort()
+    {
+        using var listener = new TcpListener(IPAddress.Loopback, 0);
+        listener.Start();
+        return ((IPEndPoint)listener.LocalEndpoint).Port;
     }
 }
 
