@@ -10,13 +10,13 @@ internal static class PanelCutter
     private const double HugePanel = 0.6;
     private const double MinCell = 0.005;
 
-    public static PageCut Plan(Raster page, bool rightToLeft, ManualGrid? manual)
+    public static PageCut Plan(Raster page, bool rightToLeft, ManualGrid? manual, IPanelRegionDetector? model = null)
     {
         int width = page.Width, height = page.Height;
         if (manual is not null)
             return Manual(page, rightToLeft, manual);
 
-        var detected = PanelDetector.Detect(page, rightToLeft);
+        var detected = PanelDetector.Detect(page, rightToLeft, model);
         var whole = new PanelBox(0, 0, width, height);
         if (detected.Panels.Count == 0 || detected.Coverage < MinCoverage)
             return new PageCut(PageCutKind.Whole, width, height, [new RowRange(0, height)])

@@ -55,6 +55,9 @@ public sealed record ComicLayout
     public bool PageBeforeBands { get; init; }
     public bool AvoidBubbles { get; init; }
 
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)]
+    public bool AiPanels { get; init; }
+
     [JsonIgnore]
     public bool UsesPageCuts => Mode is ComicReadingMode.Landscape or ComicReadingMode.Panels;
 

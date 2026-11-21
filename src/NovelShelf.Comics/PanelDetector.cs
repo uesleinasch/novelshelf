@@ -7,6 +7,23 @@ public readonly record struct PanelBox(int Left, int Top, int Right, int Bottom)
     public long Area => (long)Width * Height;
 }
 
+public interface IPanelRegionDetector
+{
+    string Id { get; }
+
+    IReadOnlyList<PanelBox> Detect(byte[] pixels, int width, int height, int channels);
+}
+
+internal sealed class ColorPage(IPanelRegionDetector model, Raster color) : IPanelRegionDetector
+{
+    public string Id => model.Id;
+
+    public IReadOnlyList<PanelBox> Detect(byte[] pixels, int width, int height, int channels) =>
+        width == color.Width && height == color.Height
+            ? model.Detect(color.Data, color.Width, color.Height, color.Channels)
+            : model.Detect(pixels, width, height, channels);
+}
+
 public sealed record PanelFrame(double Left, double Top, double Right, double Bottom);
 
 public sealed record PanelLayout(int Width, int Height, IReadOnlyList<PanelBox> Panels, IReadOnlyList<RowRange> Rows)
@@ -23,8 +40,53 @@ internal static class PanelDetector
     private const double MinArea = 0.012;
     private const double Contained = 0.9;
     private const double OverlapTolerance = 0.015;
+    private const double ModelBoxPad = 0.01;
+    private const double MinFill = 0.3;
+    private const int BackgroundTolerance = 48;
 
-    public static PanelLayout Detect(Raster page, bool rightToLeft)
+    public static PanelLayout Detect(Raster page, bool rightToLeft, IPanelRegionDetector? model = null)
+    {
+        if (model is not null && FromModel(page, rightToLeft, model) is { } found)
+            return found;
+        return Classic(page, rightToLeft);
+    }
+
+    private static PanelLayout? FromModel(Raster page, bool rightToLeft, IPanelRegionDetector model)
+    {
+        int width = page.Width, height = page.Height;
+        var boxes = model.Detect(page.Data, width, height, page.Channels)
+            .Select(b => new PanelBox(Math.Clamp(b.Left, 0, width), Math.Clamp(b.Top, 0, height),
+                Math.Clamp(b.Right, 0, width), Math.Clamp(b.Bottom, 0, height)))
+            .Where(b => b.Width >= MinSide * width && b.Height >= MinSide * height && b.Area >= MinArea * width * height)
+            .ToList();
+        if (boxes.Count == 0)
+            return null;
+        boxes.AddRange(Uncovered(page, boxes));
+        return Build(DropContained(boxes), rightToLeft, width, height);
+    }
+
+    private static IEnumerable<PanelBox> Uncovered(Raster page, List<PanelBox> boxes)
+    {
+        var scale = Math.Min(1.0, (double)WorkWidth / page.Width);
+        var width = Math.Max(1, (int)Math.Round(page.Width * scale));
+        var height = Math.Max(1, (int)Math.Round(page.Height * scale));
+        var ink = ArtOverBackground(page.Resize(width, height));
+        var pad = Math.Max(1, (int)(ModelBoxPad * Math.Max(width, height)));
+        foreach (var box in boxes)
+        {
+            int left = Math.Max(0, (int)(box.Left * scale) - pad), right = Math.Min(width, (int)Math.Ceiling(box.Right * scale) + pad);
+            int top = Math.Max(0, (int)(box.Top * scale) - pad), bottom = Math.Min(height, (int)Math.Ceiling(box.Bottom * scale) + pad);
+            for (var y = top; y < bottom; y++)
+                Array.Fill(ink, false, y * width + left, right - left);
+        }
+        var empty = Array.ConvertAll(ink, i => !i);
+        return Components(empty, width, height)
+            .Where(c => c.Pixels >= MinArea * width * height && c.Pixels >= MinFill * c.Box.Area
+                && c.Box.Width >= MinSide * width && c.Box.Height >= MinSide * height)
+            .Select(c => Scale(c.Box, scale, page.Width, page.Height));
+    }
+
+    private static PanelLayout Classic(Raster page, bool rightToLeft)
     {
         var scale = Math.Min(1.0, (double)WorkWidth / page.Width);
         var width = Math.Max(1, (int)Math.Round(page.Width * scale));
@@ -35,16 +97,48 @@ internal static class PanelDetector
         Dilate(ink, width, height, Math.Max(1, width / 240));
         var gutter = FloodFromBorder(ink, width, height);
         var boxes = Components(gutter, width, height)
+            .Select(c => c.Box)
             .Where(b => b.Width >= MinSide * width && b.Height >= MinSide * height && b.Area >= MinArea * width * height)
             .ToList();
         boxes = DropContained(boxes);
 
         var ordered = Order(boxes, rightToLeft, Math.Max(1, (int)(OverlapTolerance * height)), Math.Max(1, (int)(OverlapTolerance * width)));
-        var panels = ordered.Select(b => Scale(b, scale, page.Width, page.Height)).ToList();
-        var rows = Groups(panels, b => (b.Top, b.Bottom), Math.Max(1, (int)(OverlapTolerance * page.Height)))
+        return Rows(ordered.Select(b => Scale(b, scale, page.Width, page.Height)).ToList(), page.Width, page.Height);
+    }
+
+    private static PanelLayout Build(List<PanelBox> boxes, bool rightToLeft, int width, int height) =>
+        Rows(Order(boxes, rightToLeft, Math.Max(1, (int)(OverlapTolerance * height)), Math.Max(1, (int)(OverlapTolerance * width))),
+            width, height);
+
+    private static PanelLayout Rows(List<PanelBox> panels, int width, int height)
+    {
+        var rows = Groups(panels, b => (b.Top, b.Bottom), Math.Max(1, (int)(OverlapTolerance * height)))
             .Select(g => new RowRange(g.Min(b => b.Top), g.Max(b => b.Bottom)))
             .ToList();
-        return new PanelLayout(page.Width, page.Height, panels, rows);
+        return new PanelLayout(width, height, panels, rows);
+    }
+
+    private static bool[] ArtOverBackground(Raster page)
+    {
+        int width = page.Width, height = page.Height;
+        var border = new List<byte>(2 * (width + height));
+        for (var x = 0; x < width; x++)
+        {
+            border.Add(page.Luma(x, 0));
+            border.Add(page.Luma(x, height - 1));
+        }
+        for (var y = 0; y < height; y++)
+        {
+            border.Add(page.Luma(0, y));
+            border.Add(page.Luma(width - 1, y));
+        }
+        border.Sort();
+        var background = border[border.Count / 2];
+        var art = new bool[width * height];
+        for (var y = 0; y < height; y++)
+            for (var x = 0; x < width; x++)
+                art[y * width + x] = Math.Abs(page.Luma(x, y) - background) > BackgroundTolerance;
+        return art;
     }
 
     private static bool[] Ink(Raster page)
@@ -150,21 +244,22 @@ internal static class PanelDetector
         }
     }
 
-    private static List<PanelBox> Components(bool[] gutter, int width, int height)
+    private static List<(PanelBox Box, int Pixels)> Components(bool[] gutter, int width, int height)
     {
         var seen = (bool[])gutter.Clone();
-        var boxes = new List<PanelBox>();
+        var boxes = new List<(PanelBox, int)>();
         var stack = new Stack<int>();
         for (var start = 0; start < seen.Length; start++)
         {
             if (seen[start])
                 continue;
-            int left = width, top = height, right = 0, bottom = 0;
+            int left = width, top = height, right = 0, bottom = 0, pixels = 0;
             seen[start] = true;
             stack.Push(start);
             while (stack.TryPop(out var i))
             {
                 int x = i % width, y = i / width;
+                pixels++;
                 left = Math.Min(left, x);
                 right = Math.Max(right, x + 1);
                 top = Math.Min(top, y);
@@ -174,7 +269,7 @@ internal static class PanelDetector
                 if (y > 0) Visit(i - width);
                 if (y < height - 1) Visit(i + width);
             }
-            boxes.Add(new PanelBox(left, top, right, bottom));
+            boxes.Add((new PanelBox(left, top, right, bottom), pixels));
         }
         return boxes;
 
