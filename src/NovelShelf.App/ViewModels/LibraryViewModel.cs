@@ -64,9 +64,11 @@ public sealed partial class LibraryItemViewModel : ViewModelBase
         ? "Ainda não enviado ao Kindle"
         : PendingForKindle > 0
             ? $"Kindle tem {Novel.SentChapterCount} capítulos — {PendingForKindle} novos para enviar"
-            : (Novel.NeedsResend || Novel.VolumeLayoutChanged)
-                ? $"Kindle tem {Novel.SentChapterCount} capítulos — envie de novo para aplicar os ajustes"
+            : MarkedForResend
+                ? $"Kindle tem {Novel.SentChapterCount} capítulos — marcado para reenviar"
                 : $"Kindle em dia ({Novel.SentChapterCount} capítulos)";
+
+    private bool MarkedForResend => Novel.NeedsResend || Novel.VolumeLayoutChanged || Novel.ResendMarked;
 
     public double VolumeSize
     {
@@ -90,8 +92,8 @@ public sealed partial class LibraryItemViewModel : ViewModelBase
         ? "Não enviado"
         : PendingForKindle > 0
             ? $"{PendingForKindle} novos para o Kindle"
-            : (Novel.NeedsResend || Novel.VolumeLayoutChanged)
-                ? "Ajustes novos para o Kindle"
+            : MarkedForResend
+                ? "Reenviar ao Kindle"
                 : "Kindle em dia";
 
     private async Task LoadCoverAsync(CoverLoader covers) => Cover = await covers.LoadAsync(Novel.CoverUrl, Novel.Id);
@@ -195,8 +197,10 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
 
     [ObservableProperty]
     [NotifyCanExecuteChangedFor(nameof(DownloadCommand), nameof(SendToKindleCommand), nameof(ExportCommand), nameof(RemoveCommand), nameof(EjectKindleCommand), nameof(AdjustLayoutCommand))]
-    [NotifyCanExecuteChangedFor(nameof(SendItemToKindleCommand), nameof(ExportItemCommand), nameof(RemoveItemCommand))]
+    [NotifyCanExecuteChangedFor(nameof(SendItemToKindleCommand), nameof(ExportItemCommand), nameof(RemoveItemCommand), nameof(ResendItemCommand))]
     private bool _isBusy;
+
+    public Func<ResendViewModel, Task<bool>>? ConfirmResend { get; set; }
 
     [ObservableProperty]
     private bool _isGridView = services.Settings.LibraryGrid;
@@ -246,6 +250,7 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
             ClearFilters();
         ApplyFilter(keep);
         OnPropertyChanged(nameof(HasNovels));
+        ResendItemCommand.NotifyCanExecuteChanged();
     }
 
     private void RebuildSites()
@@ -361,6 +366,22 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
     [RelayCommand(CanExecute = nameof(CanEject))]
     private Task SendItemToKindleAsync(LibraryItemViewModel item) => RunOnAsync(item, SendToKindleCommand);
 
+    [RelayCommand(CanExecute = nameof(CanResend))]
+    private async Task ResendItemAsync(LibraryItemViewModel item)
+    {
+        Selected = item;
+        if (ConfirmResend is null)
+            return;
+        var resend = new ResendViewModel(item.Novel);
+        if (!await ConfirmResend(resend))
+            return;
+        var what = resend.Apply(services.Library);
+        Refresh(item);
+        Success("Marcado para reenviar", $"{item.Novel.Title} — {what}. Sai no próximo envio ao Kindle.");
+    }
+
+    private bool CanResend(LibraryItemViewModel? item) => !IsBusy && item?.Novel.SentAt is not null;
+
     [RelayCommand(CanExecute = nameof(CanEject))]
     private Task ExportItemAsync(LibraryItemViewModel item) => RunOnAsync(item, ExportCommand);
 
@@ -415,6 +436,7 @@ public sealed partial class LibraryViewModel(AppServices services, KindleViewMod
     {
         if (services.Library.GetNovel(item.Novel.Id) is { } updated)
             item.Novel = updated;
+        ResendItemCommand.NotifyCanExecuteChanged();
     }
 
     private async Task RunAsync(string title, Func<Task> action)

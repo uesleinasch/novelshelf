@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using NovelShelf.Core.Library;
 
 namespace NovelShelf.Core.Books;
 
@@ -7,6 +8,7 @@ public sealed record VolumeSpec(int Number, int First, int Count)
 {
     public int Through => First + Count;
     public bool IsWholeWork => Number == 0;
+    public ChapterRange Range => new(First, Through);
 }
 
 public static class Volumes
@@ -21,8 +23,11 @@ public static class Volumes
         return volumes;
     }
 
-    public static IReadOnlyList<VolumeSpec> Changed(IReadOnlyList<VolumeSpec> plan, int sentChapterCount, bool everything) =>
-        everything ? plan : plan.Where(v => v.Through > sentChapterCount).ToList();
+    public static IReadOnlyList<VolumeSpec> Changed(IReadOnlyList<VolumeSpec> plan, int sentChapterCount, bool everything,
+        IReadOnlyCollection<ChapterRange>? resend = null) =>
+        everything
+            ? plan
+            : plan.Where(v => v.Through > sentChapterCount || (resend?.Any(r => r.Overlaps(v.First, v.Through)) ?? false)).ToList();
 
     public static string FileName(string baseName, VolumeSpec volume) =>
         volume.IsWholeWork ? $"{baseName}.azw3" : $"{baseName}-vol{volume.Number:D2}.azw3";
