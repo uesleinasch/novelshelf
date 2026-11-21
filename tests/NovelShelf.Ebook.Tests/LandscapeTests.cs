@@ -370,6 +370,60 @@ public sealed class LandscapeTests
         Assert.Equal(PageCutKind.Whole, plan.Kind);
     }
 
+    private static readonly ComicLayout PanelMode = new() { Mode = ComicReadingMode.Panels, Margins = MarginMode.Off, Sharpen = false };
+
+    [Fact]
+    public void Panel_mode_gives_each_panel_its_own_upright_screen()
+    {
+        var options = Options(PanelMode);
+
+        var screens = ComicPageProcessor.ProcessPage(Grid(), options);
+        var withPage = ComicPageProcessor.ProcessPage(Grid(), Options(PanelMode with { PageBeforeBands = true }));
+
+        Assert.Equal(4, screens.Count);
+        Assert.Equal(5, withPage.Count);
+        using var first = SKBitmap.Decode(screens[0]);
+        Assert.Equal((Basic.Width, Basic.Height), (first.Width, first.Height));
+    }
+
+    [Fact]
+    public void Panel_mode_follows_the_reading_direction()
+    {
+        var western = ComicPageProcessor.PlanPanels(Grid(), Options(PanelMode))!;
+        var manga = ComicPageProcessor.PlanPanels(Grid(), Options(PanelMode) with { RightToLeft = true })!;
+
+        Assert.Equal(PageCutKind.Panels, western.Kind);
+        Assert.False(western.IsSuspect);
+        Assert.True(western.Panels[0].Left < western.Panels[1].Left);
+        Assert.True(manga.Panels[0].Left > manga.Panels[1].Left);
+        Assert.Equal(2, western.Screens.Count);
+    }
+
+    [Fact]
+    public void Manual_grid_splits_bands_with_vertical_lines()
+    {
+        var cuts = new PageCuts { Rows = [0.5], Columns = [new VerticalCut(0.5, 0.25)] };
+
+        var plan = ComicPageProcessor.PlanPanels(Grid(), Options(PanelMode), cuts)!;
+        var screens = ComicPageProcessor.ProcessPage(Grid(), Options(PanelMode), cuts);
+
+        Assert.Equal(PageCutKind.Manual, plan.Kind);
+        Assert.Equal(3, plan.Panels.Count);
+        Assert.Equal(3, screens.Count);
+        Assert.True(plan.Panels[2].Width > plan.Panels[0].Width);
+    }
+
+    [Fact]
+    public void Splash_page_stays_whole_in_panel_mode()
+    {
+        var page = Page(800, 1200, c => c.DrawRect(40, 40, 720, 1120, Fill(90)));
+
+        var plan = ComicPageProcessor.PlanPanels(page, Options(PanelMode))!;
+
+        Assert.Equal(PageCutKind.Whole, plan.Kind);
+        Assert.Single(ComicPageProcessor.ProcessPage(page, Options(PanelMode)));
+    }
+
     private sealed class CountingStore : IConvertedPageStore
     {
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (byte[] Key, List<byte[]> Screens)> _entries = [];

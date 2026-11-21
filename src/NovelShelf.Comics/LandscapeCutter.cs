@@ -7,6 +7,7 @@ public enum PageCutKind
     Whole,
     Manual,
     PanelRows,
+    Panels,
 }
 
 [Flags]
@@ -30,6 +31,9 @@ public sealed record PageCut(PageCutKind Kind, int Width, int Height, IReadOnlyL
     public int SourceHeight { get; init; }
     public int CropLeft { get; init; }
     public int CropTop { get; init; }
+    public IReadOnlyList<PanelBox> Panels { get; init; } = [];
+
+    public int ScreenCount => Panels.Count > 0 ? Panels.Count : Screens.Count;
 
     public bool IsSuspect => Suspicion != PageSuspicion.None;
 
@@ -40,6 +44,7 @@ public sealed record PageCut(PageCutKind Kind, int Width, int Height, IReadOnlyL
         - (Suspicion.HasFlag(PageSuspicion.HugePiece) ? 0.25 : 0);
 
     public double ToSourceFraction(int croppedRow) => SourceHeight == 0 ? 0 : (double)(CropTop + croppedRow) / SourceHeight;
+    public double ToSourceFractionX(int croppedColumn) => SourceWidth == 0 ? 0 : (double)(CropLeft + croppedColumn) / SourceWidth;
 }
 
 internal static class LandscapeCutter
