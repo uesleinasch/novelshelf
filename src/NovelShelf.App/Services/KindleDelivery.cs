@@ -19,7 +19,7 @@ public sealed class KindleDelivery(AppServices services)
         IProgress<ComicExportProgress>? progress = null, IProgress<string>? status = null, CancellationToken ct = default)
     {
         var everything = work.SentAt is null || work.NeedsResend || work.VolumeLayoutChanged;
-        var export = await ExportAsync(work, progress, plan => Volumes.Changed(plan, work.SentChapterCount, everything), ct);
+        var export = await ExportAsync(work, progress, plan => Volumes.Changed(plan, work.SentChapterCount, everything, work.ResendRanges), ct);
 
         var removed = new List<string>();
         if (work.VolumeLayoutChanged)

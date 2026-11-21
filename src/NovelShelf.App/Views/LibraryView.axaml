@@ -59,6 +59,9 @@
                                     <MenuItem Header="Enviar para o Kindle" Command="{Binding Owner.SendItemToKindleCommand}" CommandParameter="{Binding}">
                                         <MenuItem.Icon><ui:FASymbolIcon Symbol="Send" /></MenuItem.Icon>
                                     </MenuItem>
+                                    <MenuItem Header="Reenviar ao Kindle…" Command="{Binding Owner.ResendItemCommand}" CommandParameter="{Binding}">
+                                        <MenuItem.Icon><ui:FASymbolIcon Symbol="Refresh" /></MenuItem.Icon>
+                                    </MenuItem>
                                     <MenuItem Header="{Binding ExportMenuHeader}" Command="{Binding Owner.ExportItemCommand}" CommandParameter="{Binding}">
                                         <MenuItem.Icon><ui:FASymbolIcon Symbol="Folder" /></MenuItem.Icon>
                                     </MenuItem>
@@ -99,6 +102,9 @@
                                     </MenuItem>
                                     <MenuItem Header="Enviar para o Kindle" Command="{Binding Owner.SendItemToKindleCommand}" CommandParameter="{Binding}">
                                         <MenuItem.Icon><ui:FASymbolIcon Symbol="Send" /></MenuItem.Icon>
+                                    </MenuItem>
+                                    <MenuItem Header="Reenviar ao Kindle…" Command="{Binding Owner.ResendItemCommand}" CommandParameter="{Binding}">
+                                        <MenuItem.Icon><ui:FASymbolIcon Symbol="Refresh" /></MenuItem.Icon>
                                     </MenuItem>
                                     <MenuItem Header="{Binding ExportMenuHeader}" Command="{Binding Owner.ExportItemCommand}" CommandParameter="{Binding}">
                                         <MenuItem.Icon><ui:FASymbolIcon Symbol="Folder" /></MenuItem.Icon>
