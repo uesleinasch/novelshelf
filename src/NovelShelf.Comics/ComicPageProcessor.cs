@@ -7,7 +7,8 @@ public sealed record ComicPageOptions(
     bool RightToLeft = false,
     ComicLayout? Layout = null,
     int JpegQuality = 85,
-    ITextRegionDetector? TextDetector = null)
+    ITextRegionDetector? TextDetector = null,
+    IPanelRegionDetector? PanelModel = null)
 {
     // Bump when the same page and settings start producing different screens, or stale cached pages keep being used.
     public const int PipelineVersion = 2;
@@ -16,8 +17,10 @@ public sealed record ComicPageOptions(
 
     public ITextRegionDetector? Bubbles => EffectiveLayout.AvoidBubbles && EffectiveLayout.UsesPageCuts ? TextDetector : null;
 
+    public IPanelRegionDetector? Panels => EffectiveLayout.AiPanels && EffectiveLayout.UsesPageCuts ? PanelModel : null;
+
     public string Fingerprint =>
-        $"{PipelineVersion}|{Profile.Width}x{Profile.Height}|{Profile.Color}|{RightToLeft}|{JpegQuality}|{Bubbles?.Id}|{EffectiveLayout.ToJson()}";
+        $"{PipelineVersion}|{Profile.Width}x{Profile.Height}|{Profile.Color}|{RightToLeft}|{JpegQuality}|{Bubbles?.Id}{(Panels is { } panels ? "+" + panels.Id : "")}|{EffectiveLayout.ToJson()}";
 }
 
 public static class ComicPageProcessor
@@ -90,9 +93,9 @@ public static class ComicPageProcessor
         var bounds = MarginBounds(source, layout);
         var cropped = source.Crop(bounds);
         if (layout.Mode == ComicReadingMode.Landscape)
-            return ProcessLandscape(cropped, options, ManualRows(cuts, bounds, source.Height));
+            return ProcessLandscape(cropped, options, ManualRows(cuts, bounds, source.Height), PanelModel(data, source, bounds, options));
         if (layout.Mode == ComicReadingMode.Panels)
-            return ProcessPanels(cropped, options, Grid(cuts, bounds, source.Width, source.Height));
+            return ProcessPanels(cropped, options, Grid(cuts, bounds, source.Width, source.Height), PanelModel(data, source, bounds, options));
         if (cropped.Width > cropped.Height * 1.05 && layout.WidePages != WidePageMode.Keep)
         {
             if (layout.WidePages == WidePageMode.Rotate)
@@ -113,7 +116,7 @@ public static class ComicPageProcessor
         if (source is null)
             return null;
         var bounds = MarginBounds(source, options.EffectiveLayout);
-        var plan = PlanLandscapeCut(source.Crop(bounds), options, ManualRows(cuts, bounds, source.Height));
+        var plan = PlanLandscapeCut(source.Crop(bounds), options, ManualRows(cuts, bounds, source.Height), PanelModel(data, source, bounds, options));
         return plan with { SourceWidth = source.Width, SourceHeight = source.Height, CropLeft = bounds.Left, CropTop = bounds.Top };
     }
 
@@ -130,7 +133,7 @@ public static class ComicPageProcessor
         if (source is null)
             return null;
         var bounds = MarginBounds(source, options.EffectiveLayout);
-        var plan = PlanPanelCut(source.Crop(bounds), options, Grid(cuts, bounds, source.Width, source.Height));
+        var plan = PlanPanelCut(source.Crop(bounds), options, Grid(cuts, bounds, source.Width, source.Height), PanelModel(data, source, bounds, options));
         return plan with { SourceWidth = source.Width, SourceHeight = source.Height, CropLeft = bounds.Left, CropTop = bounds.Top };
     }
 
@@ -140,7 +143,7 @@ public static class ComicPageProcessor
         if (source is null)
             return [];
         var bounds = MarginBounds(source, options.EffectiveLayout);
-        var layout = PanelDetector.Detect(source.Crop(bounds), options.RightToLeft);
+        var layout = PanelDetector.Detect(source.Crop(bounds), options.RightToLeft, PanelModel(data, source, bounds, options));
         return layout.Panels.Select(p => new PanelFrame(
                 (double)(bounds.Left + p.Left) / source.Width, (double)(bounds.Top + p.Top) / source.Height,
                 (double)(bounds.Left + p.Right) / source.Width, (double)(bounds.Top + p.Bottom) / source.Height))
@@ -166,18 +169,23 @@ public static class ComicPageProcessor
         _ => new SKRectI(0, 0, source.Width, source.Height),
     };
 
-    private static PageCut PlanLandscapeCut(Raster page, ComicPageOptions options, IReadOnlyList<int>? manualRows)
+    private static IPanelRegionDetector? PanelModel(byte[] data, Raster source, SKRectI bounds, ComicPageOptions options) =>
+        options.Panels is not { } model || source.Channels >= 3 ? options.Panels
+        : Raster.Decode(data, color: true) is { } color ? new ColorPage(model, color.Crop(bounds))
+        : model;
+
+    private static PageCut PlanLandscapeCut(Raster page, ComicPageOptions options, IReadOnlyList<int>? manualRows, IPanelRegionDetector? panels)
     {
-        var plan = LandscapeCutter.Plan(page, options.Profile, options.EffectiveLayout, manualRows);
+        var plan = LandscapeCutter.Plan(page, options.Profile, options.EffectiveLayout, manualRows, panels);
         if (options.Bubbles is not { } detector || plan.Kind == PageCutKind.Manual)
             return plan;
         var screenRows = (double)page.Width * options.Profile.Width / options.Profile.Height;
         return BubbleGuard.AvoidCuttingBubbles(plan, BubbleGuard.Regions(page, detector), screenRows);
     }
 
-    private static PageCut PlanPanelCut(Raster page, ComicPageOptions options, ManualGrid? grid)
+    private static PageCut PlanPanelCut(Raster page, ComicPageOptions options, ManualGrid? grid, IPanelRegionDetector? panels)
     {
-        var plan = PanelCutter.Plan(page, options.RightToLeft, grid);
+        var plan = PanelCutter.Plan(page, options.RightToLeft, grid, panels);
         return options.Bubbles is { } detector && plan.Kind == PageCutKind.Panels
             ? BubbleGuard.IncludeBubbles(plan, BubbleGuard.Regions(page, detector))
             : plan;
@@ -198,9 +206,9 @@ public static class ComicPageProcessor
             .ToList();
     }
 
-    private static List<byte[]> ProcessLandscape(Raster page, ComicPageOptions options, IReadOnlyList<int>? manualRows)
+    private static List<byte[]> ProcessLandscape(Raster page, ComicPageOptions options, IReadOnlyList<int>? manualRows, IPanelRegionDetector? panels)
     {
-        var plan = PlanLandscapeCut(page, options, manualRows);
+        var plan = PlanLandscapeCut(page, options, manualRows, panels);
         var output = new List<byte[]>(plan.Screens.Count + 1);
         if (options.EffectiveLayout.PageBeforeBands && plan.Screens.Count > 1)
             output.Add(FitLandscape(page, options));
@@ -209,9 +217,9 @@ public static class ComicPageProcessor
         return output;
     }
 
-    private static List<byte[]> ProcessPanels(Raster page, ComicPageOptions options, ManualGrid? grid)
+    private static List<byte[]> ProcessPanels(Raster page, ComicPageOptions options, ManualGrid? grid, IPanelRegionDetector? panels)
     {
-        var plan = PlanPanelCut(page, options, grid);
+        var plan = PlanPanelCut(page, options, grid, panels);
         var output = new List<byte[]>(plan.Panels.Count + 1);
         if (options.EffectiveLayout.PageBeforeBands && plan.Panels.Count > 1)
             output.Add(FitAndEncode(page, options));

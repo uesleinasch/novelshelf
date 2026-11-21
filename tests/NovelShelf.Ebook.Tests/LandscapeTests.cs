@@ -470,6 +470,80 @@ public sealed class LandscapeTests
             (Options(Landscape with { AvoidBubbles = true }) with { TextDetector = detector }).Fingerprint);
     }
 
+    private sealed class FixedPanels(params PanelBox[] boxes) : IPanelRegionDetector
+    {
+        public string Id => "panels";
+
+        public IReadOnlyList<PanelBox> Detect(byte[] pixels, int width, int height, int channels) => boxes;
+    }
+
+    private static readonly ComicLayout AiPanelMode = PanelMode with { AiPanels = true };
+
+    [Fact]
+    public void Panel_model_splits_a_page_without_gutters()
+    {
+        var page = Page(800, 1200, c => c.DrawRect(40, 40, 720, 1120, Fill(90)));
+        var model = new FixedPanels(new PanelBox(410, 40, 760, 600), new PanelBox(40, 40, 400, 600), new PanelBox(40, 610, 760, 1160));
+
+        var plan = ComicPageProcessor.PlanPanels(page, Options(AiPanelMode) with { PanelModel = model })!;
+        var manga = ComicPageProcessor.PlanPanels(page, Options(AiPanelMode) with { PanelModel = model, RightToLeft = true })!;
+        var off = ComicPageProcessor.PlanPanels(page, Options(PanelMode) with { PanelModel = model })!;
+
+        Assert.Equal(PageCutKind.Panels, plan.Kind);
+        Assert.Equal([new PanelBox(40, 40, 400, 600), new PanelBox(410, 40, 760, 600), new PanelBox(40, 610, 760, 1160)], plan.Panels);
+        Assert.Equal(410, manga.Panels[0].Left);
+        Assert.Equal(PageCutKind.Whole, off.Kind);
+    }
+
+    [Fact]
+    public void Panel_model_drops_boxes_inside_others_and_tiny_ones()
+    {
+        var model = new FixedPanels(
+            new PanelBox(40, 40, 760, 1160), new PanelBox(100, 100, 300, 300), new PanelBox(10, 10, 30, 30));
+
+        var panels = ComicPageProcessor.DetectPanels(Grid(), Options(AiPanelMode) with { PanelModel = model });
+
+        Assert.Single(panels);
+    }
+
+    [Fact]
+    public void Art_the_panel_model_misses_becomes_its_own_panel()
+    {
+        var page = Page(800, 1200, c =>
+        {
+            c.DrawRect(40, 40, 720, 340, Fill(90));
+            c.DrawRect(40, 420, 720, 340, Fill(90));
+            c.DrawRect(40, 800, 720, 360, Fill(90));
+        }, SKColors.Black);
+        var model = new FixedPanels(new PanelBox(40, 40, 760, 380), new PanelBox(40, 800, 760, 1160));
+
+        var plan = ComicPageProcessor.PlanPanels(page, Options(AiPanelMode) with { PanelModel = model })!;
+
+        Assert.Equal(3, plan.Panels.Count);
+        Assert.InRange(plan.Panels[1].Top, 400, 440);
+        Assert.InRange(plan.Panels[1].Bottom, 740, 780);
+    }
+
+    [Fact]
+    public void Gutters_are_used_when_the_panel_model_finds_nothing()
+    {
+        var options = Options(AiPanelMode) with { PanelModel = new FixedPanels() };
+
+        Assert.Equal(4, ComicPageProcessor.DetectPanels(Grid(), options).Count);
+        Assert.Equal(4, ComicPageProcessor.PlanPanels(Grid(), options)!.Panels.Count);
+    }
+
+    [Fact]
+    public void Panel_model_only_changes_the_fingerprint_when_used()
+    {
+        var model = new FixedPanels();
+
+        Assert.Equal(Options(PanelMode).Fingerprint, (Options(PanelMode) with { PanelModel = model }).Fingerprint);
+        Assert.NotEqual(Options(PanelMode).Fingerprint, (Options(AiPanelMode) with { PanelModel = model }).Fingerprint);
+        Assert.DoesNotContain("AiPanels", PanelMode.ToJson());
+        Assert.True(ComicLayout.FromJson(AiPanelMode.ToJson()).AiPanels);
+    }
+
     private sealed class CountingStore : IConvertedPageStore
     {
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (byte[] Key, List<byte[]> Screens)> _entries = [];

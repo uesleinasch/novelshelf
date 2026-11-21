@@ -58,13 +58,14 @@ internal static class LandscapeCutter
     private const double HugeScreen = 1.2;
     private const double MinPanelCoverage = 0.5;
 
-    public static PageCut Plan(Raster page, KindleProfile profile, ComicLayout layout, IReadOnlyList<int>? manualRows = null)
+    public static PageCut Plan(Raster page, KindleProfile profile, ComicLayout layout, IReadOnlyList<int>? manualRows = null,
+        IPanelRegionDetector? model = null)
     {
         if (manualRows is not null)
             return Manual(page, manualRows);
         var screenRows = (double)page.Width * profile.Width / profile.Height;
         var plan = Detect(page, screenRows, layout);
-        if (plan.Kind is PageCutKind.Slices or PageCutKind.Whole && PanelRows(page, screenRows, layout) is { } rows)
+        if (plan.Kind is PageCutKind.Slices or PageCutKind.Whole && PanelRows(page, screenRows, layout, model) is { } rows)
             plan = rows;
         var suspicion = plan.Kind is PageCutKind.Slices or PageCutKind.Whole ? PageSuspicion.NoClearGutter : PageSuspicion.None;
         if (plan.Screens.Any(s => s.Height < TinyScreen * screenRows))
@@ -117,9 +118,9 @@ internal static class LandscapeCutter
         return new PageCut(PageCutKind.Bands, width, height, Screens(bands, height, screenRows, layout));
     }
 
-    private static PageCut? PanelRows(Raster page, double screenRows, ComicLayout layout)
+    private static PageCut? PanelRows(Raster page, double screenRows, ComicLayout layout, IPanelRegionDetector? model)
     {
-        var panels = PanelDetector.Detect(page, rightToLeft: false);
+        var panels = PanelDetector.Detect(page, rightToLeft: false, model);
         if (panels.Rows.Count < 2 || panels.Coverage < MinPanelCoverage)
             return null;
         var rows = panels.Rows;

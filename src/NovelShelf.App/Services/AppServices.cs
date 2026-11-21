@@ -39,7 +39,8 @@ public sealed class AppServices
         Manga = new MangaBackend(installer, server, client);
         ComicDownloader = new ComicDownloader(Library, client, paths);
         TextModel = new TextModel(Path.Combine(paths.Root, "models"), downloads);
-        ComicExporter = new ComicExporter(Library, paths, ComicDownloader, () => TextModel.Detector);
+        PanelModel = new PanelModel(Path.Combine(paths.Root, "models"), downloads);
+        ComicExporter = new ComicExporter(Library, paths, ComicDownloader, () => TextModel.Detector, () => PanelModel.Detector);
         ComicPageCache = new ComicPageCache(paths);
         Covers = new CoverLoader(paths);
         Downloads = new DownloadService(this);
@@ -62,6 +63,7 @@ public sealed class AppServices
     public ComicExporter ComicExporter { get; }
     public ComicPageCache ComicPageCache { get; }
     public TextModel TextModel { get; }
+    public PanelModel PanelModel { get; }
     public CoverLoader Covers { get; }
     public DownloadService Downloads { get; }
     public KindleDelivery Delivery { get; }

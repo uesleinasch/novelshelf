@@ -11,6 +11,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="NovelShelf.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\NovelShelf.Comics\NovelShelf.Comics.csproj" />
   </ItemGroup>
 

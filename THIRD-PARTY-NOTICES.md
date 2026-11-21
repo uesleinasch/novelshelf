@@ -45,7 +45,8 @@ Estes programas **não** fazem parte do NovelShelf nem dos pacotes de release. E
 | Eclipse Temurin JRE 21 | GPLv2 com Classpath Exception | https://adoptium.net |
 | Extensões do Project Nox (instaladas pelo usuário) | AGPL-3.0 | https://github.com/ProjectNox-org/manga-extensoes |
 | Detector de balões e texto `detector-v4-s_int8.onnx` (ogkalu/comic-text-and-bubble-detector) | Apache-2.0 | https://huggingface.co/ogkalu/comic-text-and-bubble-detector |
+| Detector de quadros `yolo13n_panel-bubble_det_640_op18.onnx` (Gunnm92/comic-panel-bubble-detection-yolo13n, projeto BDReader) | Apache-2.0 | https://huggingface.co/Gunnm92/comic-panel-bubble-detection-yolo13n |
 
-O detector de balões roda no próprio computador pelo ONNX Runtime (MIT, Microsoft), que vai no pacote do app.
+Os detectores de balões e de quadros rodam no próprio computador pelo ONNX Runtime (MIT, Microsoft), que vai no pacote do app.
 
 As extensões rodam dentro do Suwayomi, num processo separado. O NovelShelf conversa com ele por HTTP em `127.0.0.1` e não incorpora o código delas.

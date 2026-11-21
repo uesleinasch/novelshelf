@@ -7,7 +7,7 @@ namespace NovelShelf.Core.Comics;
 public sealed record ComicExportProgress(int Done, int Total, string ChapterTitle);
 
 public sealed class ComicExporter(LibraryStore store, AppPaths paths, ComicDownloader downloader,
-    Func<ITextRegionDetector?>? textDetector = null)
+    Func<ITextRegionDetector?>? textDetector = null, Func<IPanelRegionDetector?>? panelModel = null)
 {
     public async Task<ExportedBook> ExportAsync(
         long novelId, KindleProfile profile, IProgress<ComicExportProgress>? progress = null, CancellationToken ct = default)
@@ -39,7 +39,8 @@ public sealed class ComicExporter(LibraryStore store, AppPaths paths, ComicDownl
     private async Task<IReadOnlyList<ExportedBook>> ExportAsync(LibraryNovel comic, IReadOnlyList<StoredComicChapter> stored,
         IReadOnlyList<VolumeSpec> volumes, KindleProfile profile, IProgress<ComicExportProgress>? progress, CancellationToken ct)
     {
-        var options = new ComicPageOptions(profile, comic.RightToLeft, store.GetComicLayout(comic.Id), TextDetector: textDetector?.Invoke());
+        var options = new ComicPageOptions(profile, comic.RightToLeft, store.GetComicLayout(comic.Id), TextDetector: textDetector?.Invoke(),
+            PanelModel: panelModel?.Invoke());
         var cover = Cover(comic.Id, options);
         var cache = new ComicPageCache(paths).Open(comic.Id, options);
         var total = volumes.Sum(v => v.Count);
