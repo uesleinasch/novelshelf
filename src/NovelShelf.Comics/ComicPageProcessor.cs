@@ -38,7 +38,7 @@ public static class ComicPageProcessor
 
     public static List<byte[]> ProcessChapter(IReadOnlyList<byte[]> pages, ComicPageOptions options, CancellationToken ct = default)
     {
-        if (UsesStrip(pages, options.EffectiveLayout))
+        if (options.EffectiveLayout.Mode != ComicReadingMode.Landscape && UsesStrip(pages, options.EffectiveLayout))
             return ProcessStrip(pages, options, ct);
 
         var results = new List<byte[]>[pages.Count];
@@ -54,13 +54,9 @@ public static class ComicPageProcessor
         if (source is null)
             return [];
 
-        var bounds = layout.Margins switch
-        {
-            MarginMode.Auto => ContentBounds(source),
-            MarginMode.Manual => ManualBounds(source.Width, source.Height, layout),
-            _ => new SKRectI(0, 0, source.Width, source.Height),
-        };
-        var cropped = source.Crop(bounds);
+        var cropped = CropMargins(source, layout);
+        if (layout.Mode == ComicReadingMode.Landscape)
+            return ProcessLandscape(cropped, options);
         if (cropped.Width > cropped.Height * 1.05 && layout.WidePages != WidePageMode.Keep)
         {
             if (layout.WidePages == WidePageMode.Rotate)
@@ -73,6 +69,53 @@ public static class ComicPageProcessor
                 : [FitAndEncode(left, options), FitAndEncode(right, options)];
         }
         return [FitAndEncode(cropped, options)];
+    }
+
+    public static PageCut? PlanLandscape(byte[] data, ComicPageOptions options)
+    {
+        var source = Raster.Decode(data, options.Profile.Color);
+        return source is null ? null : LandscapeCutter.Plan(CropMargins(source, options.EffectiveLayout), options.Profile, options.EffectiveLayout);
+    }
+
+    private static Raster CropMargins(Raster source, ComicLayout layout) => source.Crop(layout.Margins switch
+    {
+        MarginMode.Auto => ContentBounds(source),
+        MarginMode.Manual => ManualBounds(source.Width, source.Height, layout),
+        _ => new SKRectI(0, 0, source.Width, source.Height),
+    });
+
+    private static List<byte[]> ProcessLandscape(Raster page, ComicPageOptions options)
+    {
+        var plan = LandscapeCutter.Plan(page, options.Profile, options.EffectiveLayout);
+        var output = new List<byte[]>(plan.Screens.Count + 1);
+        if (options.EffectiveLayout.PageBeforeBands && plan.Kind != PageCutKind.Whole)
+            output.Add(FitLandscape(page, options));
+        foreach (var screen in plan.Screens)
+            output.Add(FitLandscape(page.Crop(new SKRectI(0, screen.Top, page.Width, screen.Bottom)), options));
+        return output;
+    }
+
+    private static byte[] FitLandscape(Raster region, ComicPageOptions options)
+    {
+        int screenWidth = options.Profile.Height, screenHeight = options.Profile.Width;
+        var scale = Math.Min((double)screenWidth / region.Width, (double)screenHeight / region.Height);
+        var width = Math.Clamp((int)Math.Round(region.Width * scale), 1, screenWidth);
+        var height = Math.Clamp((int)Math.Round(region.Height * scale), 1, screenHeight);
+        var landscape = Raster.Blank(screenWidth, screenHeight, region.Channels);
+        landscape.Paste(region.Resize(width, height), (screenWidth - width) / 2, (screenHeight - height) / 2);
+        var page = landscape.Rotate(counterClockwise: options.EffectiveLayout.Turn == LandscapeTurn.CounterClockwise);
+        return Finish(page, options);
+    }
+
+    private static byte[] Finish(Raster page, ComicPageOptions options)
+    {
+        var layout = options.EffectiveLayout;
+        if (layout.Sharpen)
+            page.AutoLevel();
+        page.ApplyGamma(layout.Gamma);
+        if (layout.Sharpen)
+            page.Sharpen();
+        return page.EncodeJpeg(options.JpegQuality);
     }
 
     public static List<byte[]> ProcessStrip(IReadOnlyList<byte[]> pages, ComicPageOptions options, CancellationToken ct = default)
@@ -162,8 +205,7 @@ public static class ComicPageProcessor
         var profile = options.Profile;
         var page = Raster.Blank(profile.Width, profile.Height, profile.Color ? 4 : 1);
         Buffer.BlockCopy(rows, 0, page.Data, 0, rowCount * page.Stride);
-        page.ApplyGamma(options.EffectiveLayout.Gamma);
-        return page.EncodeJpeg(options.JpegQuality);
+        return Finish(page, options);
     }
 
     private static byte[] FitAndEncode(Raster source, ComicPageOptions options)
@@ -174,8 +216,7 @@ public static class ComicPageProcessor
         var height = Math.Clamp((int)Math.Round(source.Height * scale), 1, profile.Height);
         var page = Raster.Blank(profile.Width, profile.Height, source.Channels);
         page.Paste(source.Resize(width, height), (profile.Width - width) / 2, (profile.Height - height) / 2);
-        page.ApplyGamma(options.EffectiveLayout.Gamma);
-        return page.EncodeJpeg(options.JpegQuality);
+        return Finish(page, options);
     }
 
     private static SKRectI ManualBounds(int width, int height, ComicLayout layout)
