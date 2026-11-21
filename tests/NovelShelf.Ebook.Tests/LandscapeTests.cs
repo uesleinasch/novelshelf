@@ -275,4 +275,51 @@ public sealed class LandscapeTests
         Assert.Equal(0, loaded.MergeBands);
         Assert.True(ComicLayout.FromJson("""{"Mode":"Pages"}""").Sharpen);
     }
+
+    [Fact]
+    public void Cached_pages_are_reused_and_a_new_cut_converts_only_that_page()
+    {
+        byte[][] pages = [Tiers(800, (50, 400), (450, 800)), Tiers(800, (50, 600)), Tiers(800, (50, 300), (350, 700))];
+        var cache = new CountingStore();
+        var options = Options(Landscape);
+
+        var first = ComicPageProcessor.ProcessChapter(pages, options, TestContext.Current.CancellationToken, cache: cache);
+        var saved = cache.Saves;
+        var again = ComicPageProcessor.ProcessChapter(pages, options, TestContext.Current.CancellationToken, cache: cache);
+        var cuts = new Dictionary<int, PageCuts> { [1] = new() { Rows = [0.5] } };
+        var edited = ComicPageProcessor.ProcessChapter(pages, options, TestContext.Current.CancellationToken, cuts, cache);
+
+        Assert.Equal(3, saved);
+        Assert.Equal(first, again);
+        Assert.Equal(4, cache.Saves);
+        Assert.Equal(first.Count + 1, edited.Count);
+    }
+
+    [Fact]
+    public void Settings_change_the_fingerprint()
+    {
+        var plain = Options(Landscape);
+
+        Assert.Equal(plain.Fingerprint, Options(Landscape with { }).Fingerprint);
+        Assert.NotEqual(plain.Fingerprint, Options(Landscape with { Gamma = 1.4 }).Fingerprint);
+        Assert.NotEqual(plain.Fingerprint, new ComicPageOptions(KindleProfile.Default, Layout: Landscape).Fingerprint);
+        Assert.NotEqual(plain.Fingerprint, (plain with { RightToLeft = true }).Fingerprint);
+    }
+
+    private sealed class CountingStore : IConvertedPageStore
+    {
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (byte[] Key, List<byte[]> Screens)> _entries = [];
+        private int _saves;
+
+        public int Saves => _saves;
+
+        public List<byte[]>? Find(string slot, byte[] key) =>
+            _entries.TryGetValue(slot, out var entry) && entry.Key.AsSpan().SequenceEqual(key) ? entry.Screens : null;
+
+        public void Save(string slot, byte[] key, IReadOnlyList<byte[]> screens)
+        {
+            _entries[slot] = (key, screens.ToList());
+            Interlocked.Increment(ref _saves);
+        }
+    }
 }

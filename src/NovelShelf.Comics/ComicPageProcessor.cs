@@ -8,7 +8,13 @@ public sealed record ComicPageOptions(
     ComicLayout? Layout = null,
     int JpegQuality = 85)
 {
+    // Bump when the same page and settings start producing different screens, or stale cached pages keep being used.
+    public const int PipelineVersion = 1;
+
     public ComicLayout EffectiveLayout => (Layout ?? ComicLayout.Default).Normalized();
+
+    public string Fingerprint =>
+        $"{PipelineVersion}|{Profile.Width}x{Profile.Height}|{Profile.Color}|{RightToLeft}|{JpegQuality}|{EffectiveLayout.ToJson()}";
 }
 
 public static class ComicPageProcessor
@@ -37,20 +43,37 @@ public static class ComicPageProcessor
     };
 
     public static List<byte[]> ProcessChapter(IReadOnlyList<byte[]> pages, ComicPageOptions options, CancellationToken ct = default,
-        IReadOnlyDictionary<int, PageCuts>? cuts = null)
+        IReadOnlyDictionary<int, PageCuts>? cuts = null, IConvertedPageStore? cache = null)
     {
         if (options.EffectiveLayout.Mode != ComicReadingMode.Landscape && UsesStrip(pages, options.EffectiveLayout))
-            return ProcessStrip(pages, options, ct);
-        return ProcessChapterByPage(pages, options, cuts, ct).SelectMany(r => r).ToList();
+            return Cached(cache, "strip", () => ConvertedPageKey.Strip(pages), () => ProcessStrip(pages, options, ct));
+        return ProcessChapterByPage(pages, options, cuts, ct, cache).SelectMany(r => r).ToList();
     }
 
     public static List<byte[]>[] ProcessChapterByPage(IReadOnlyList<byte[]> pages, ComicPageOptions options,
-        IReadOnlyDictionary<int, PageCuts>? cuts = null, CancellationToken ct = default)
+        IReadOnlyDictionary<int, PageCuts>? cuts = null, CancellationToken ct = default, IConvertedPageStore? cache = null)
     {
+        var landscape = options.EffectiveLayout.Mode == ComicReadingMode.Landscape;
         var results = new List<byte[]>[pages.Count];
-        Parallel.For(0, pages.Count, new ParallelOptions { MaxDegreeOfParallelism = Workers, CancellationToken = ct },
-            i => results[i] = ProcessPage(pages[i], options, cuts?.GetValueOrDefault(i)));
+        Parallel.For(0, pages.Count, new ParallelOptions { MaxDegreeOfParallelism = Workers, CancellationToken = ct }, i =>
+        {
+            var cut = landscape ? cuts?.GetValueOrDefault(i) : null;
+            results[i] = Cached(cache, i.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                () => ConvertedPageKey.Page(pages[i], cut), () => ProcessPage(pages[i], options, cut));
+        });
         return results;
+    }
+
+    private static List<byte[]> Cached(IConvertedPageStore? cache, string slot, Func<byte[]> key, Func<List<byte[]>> convert)
+    {
+        if (cache is null)
+            return convert();
+        var id = key();
+        if (cache.Find(slot, id) is { } hit)
+            return hit;
+        var screens = convert();
+        cache.Save(slot, id, screens);
+        return screens;
     }
 
     public static List<byte[]> ProcessPage(byte[] data, ComicPageOptions options, PageCuts? cuts = null)
