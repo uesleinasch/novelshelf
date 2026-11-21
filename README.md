@@ -85,11 +85,13 @@ Acima da lista ficam a busca por título ou autor e os filtros: tipo (novel ou q
 
 **Downloads.** O botão **Baixar** põe a obra na fila e você pode continuar usando o app. Acompanhe tudo na página **Downloads**: progresso de cada obra, pausar, retomar, tirar da fila e mudar a ordem. Obras do mesmo site baixam uma de cada vez, para não sobrecarregar o site; sites diferentes baixam ao mesmo tempo. Se você fechar o app no meio, a fila volta sozinha na próxima vez.
 
-**Atualização automática.** Ao abrir o app (e, se quiser, a cada 1 a 24 horas), o NovelShelf procura capítulos novos das obras que você já baixou até o último capítulo e põe na fila. Uma obra só conta como "baixada até o fim" depois que um download chega ao último capítulo publicado; para obras adicionadas antes desta versão, clique em **Baixar** uma vez. Quando chegam capítulos novos, aparece um aviso no app e uma notificação do sistema no Linux. Também dá para buscar na hora: botão **Buscar capítulos novos** na Biblioteca. Na página **Kindle**, ligue **Enviar ao conectar o Kindle** e, ao plugar o cabo, o app baixa o que saiu e envia todas as obras com novidades; depois é só ejetar. Mangás e HQs entram na atualização só se você ligar a opção, porque baixam muito mais dados.
+**Atualização automática.** Ao abrir o app (e, se quiser, a cada 1 a 24 horas), o NovelShelf procura capítulos novos das obras que você já baixou até o último capítulo e põe na fila. Uma obra só conta como "baixada até o fim" depois que um download chega ao último capítulo publicado; para obras adicionadas antes desta versão, clique em **Baixar** uma vez. Quando chegam capítulos novos, aparece um aviso no app e uma notificação do sistema no Linux. Também dá para buscar na hora: botão **Buscar capítulos novos** na Biblioteca. **Plugar e sincronizar.** Ao plugar o cabo (ou ao abrir o app com o Kindle já plugado), o app busca capítulos novos, converte e envia todas as obras com novidades, sem nenhum clique. A página **Kindle** mostra em que passo está ("Convertendo e enviando 2 de 5…"), e no fim chega a notificação "X obras enviadas, pode ejetar". O app nunca ejeta sozinho: o botão de ejetar continua manual. Mangás e HQs também entram na atualização; as páginas já convertidas ficam em cache, então o envio só processa o que é novo. As duas opções vêm ligadas e podem ser desligadas na página **Kindle** (**Enviar ao conectar o Kindle** e **Incluir mangás e HQs**).
 
 **Volumes.** Obra muito longa fica pesada e lenta no Kindle. Nos detalhes da obra, em **Dividir em volumes**, escolha quantos capítulos vão em cada volume (0 = um livro só). Cada volume vira um arquivo próprio, como `Título — Vol. 03 (cap. 201–300)`. A capa de cada volume ganha uma faixa com "VOL. 03" na parte de baixo, para diferenciar os volumes também na grade de capas do Kindle. Quando saem capítulos novos, só o último volume é gerado e enviado de novo; os anteriores ficam como estão no Kindle. Se você mudar a divisão de uma obra já enviada, no próximo envio o app apaga do Kindle os arquivos antigos dela (só os da pasta `NovelShelf`) e manda os volumes novos. Vale para novels e quadrinhos.
 
-**Estilo do livro.** Na página **Kindle**, em *Estilo dos livros*, você ajusta o recuo da primeira linha, o espaço entre parágrafos, o alinhamento (justificado ou à esquerda) e o título dos capítulos (como no site, só "Capítulo N" ou sem título). A prévia mostra o resultado na hora. Cada novel pode ter um estilo próprio: botão **Estilo do livro** nos detalhes dela. Ao mudar o estilo de uma obra já enviada, ela aparece como "Ajustes novos para o Kindle"; basta enviar de novo. Tamanho e tipo da letra continuam no menu *Aa* do próprio Kindle.
+**Estilo do livro.** Na página **Kindle**, em *Estilo dos livros*, você ajusta o recuo da primeira linha, o espaço entre parágrafos, o alinhamento (justificado ou à esquerda) e o título dos capítulos (como no site, só "Capítulo N" ou sem título). A prévia mostra o resultado na hora. Cada novel pode ter um estilo próprio: botão **Estilo do livro** nos detalhes dela. Ao mudar o estilo de uma obra já enviada, ela aparece como "Reenviar ao Kindle"; basta enviar de novo.
+
+**Reenviar.** Para mandar de novo algo que o app já considera enviado (um livro apagado no Kindle, um arquivo que chegou com defeito), clique com o botão direito na obra e escolha **Reenviar ao Kindle…**. Dá para marcar a obra inteira, um pacote de capítulos (do capítulo X ao Y; vão de novo os volumes que têm esses capítulos, ou o livro todo se a obra não for dividida) ou volumes específicos. Só marca: o reenvio acontece no próximo **Enviar** ou ao conectar o Kindle, se o envio automático estiver ligado. Nada é apagado do Kindle; o arquivo é substituído no lugar e a posição de leitura fica. Tamanho e tipo da letra continuam no menu *Aa* do próprio Kindle.
 
 A lista mostra, para cada novel, quantos capítulos estão no PC e quantos já estão no Kindle. Por exemplo: *"Kindle tem 120 capítulos — 15 novos para enviar"*.
 
@@ -109,7 +111,7 @@ Dentro dela:
 | `library.db` | a biblioteca |
 | `books/` | EPUB e AZW3 gerados |
 | `covers/` | capas |
-| `comics/` | páginas originais dos quadrinhos baixados |
+| `comics/` | páginas originais dos quadrinhos baixados e, em `comics/<obra>/cache/`, as páginas já convertidas |
 | `suwayomi/` | Java, servidor de mangás e as extensões instaladas |
 | `settings.json` | modelo do Kindle e preferências |
 
@@ -159,13 +161,20 @@ Os sites de quadrinhos vêm das **extensões do Mihon** (o leitor de mangá do A
   - Kindle Paperwhite 11ª/12ª geração (6,8", 1236×1648).
 - **Marcado como quadrinho:** o AZW3 informa ao Kindle que é quadrinho, sem margem e em retrato, com a resolução da tela. Assim o Kindle mostra a página inteira, sem reservar espaço no topo.
 - **Ajuste por obra:** na biblioteca, **Ajustar corte** abre um preview das telas exatas do Kindle. Lá dá para escolher:
-  - formato (páginas ou tira contínua);
+  - formato (páginas, tira contínua, faixas deitadas ou quadro a quadro);
   - margens (sozinho, sem corte ou manual, para dar zoom);
   - páginas duplas (dividir, manter ou girar);
   - no webtoon, quanto repetir no topo da tela seguinte e até onde procurar um espaço entre quadros;
+  - nitidez e contraste para e-ink (ligado por padrão);
   - tons médios (gama).
 
-  O ajuste fica salvo para aquela obra, e Converter e Enviar passam a usá-lo.
+  O ajuste fica salvo para aquela obra, e Converter e Enviar passam a usá-lo. Trocar o formato de uma obra já enviada muda o número de telas, e o marcador de leitura vai parar em outro ponto; o app avisa antes de salvar.
+- **Faixas deitadas** (para HQ com letra pequena no Kindle de 6"): cada faixa de quadros vira uma tela para ler com o Kindle deitado, então a letra fica maior. O livro continua em pé, porque a imagem já vai girada; você escolhe o lado do giro. O corte é nos espaços lisos (brancos ou pretos) entre as faixas. Faixas baixas vizinhas dividem uma tela, e faixa alta demais vai em dois pedaços com sobra. Os dois limites são ajustáveis. Quando não há espaço reto entre as faixas (calha inclinada, quadro torto), o app procura os quadros um a um e corta entre as linhas de quadros. Se nem assim achar, a página vai em pedaços iguais com sobra. Página de um quadro só (splash) vai inteira. Dá para mostrar a página inteira antes dos pedaços. O app nunca escolhe esse modo sozinho.
+- **Quadro a quadro** (Kindle em pé): cada quadro vira uma tela, na ordem de leitura (da direita para a esquerda em mangá). A letra fica 2 a 3 vezes maior, e a página rende mais telas. Quadro pequeno é ampliado no máximo 3 vezes para não borrar. Página de um quadro só vai inteira, e página em que o app não acha os quadros também vai inteira e entra na lista de suspeitas. O app nunca escolhe esse modo sozinho.
+- **Corte manual:** nas faixas deitadas e no quadro a quadro, **Editar corte** (ou um clique no preview) abre o editor da página. A lista começa só com as páginas suspeitas: sem calha clara, com pedaço minúsculo ou com pedaço gigante. A barra do topo tem as formas: arraste uma para a página, ou clique nela para pôr no meio. No quadro a quadro, cada quadro é uma caixa verde, numerada na ordem de leitura (da direita para a esquerda em mangá): os quadros achados sozinhos já vêm como caixas, arraste a caixa para mover, as bordas e cantos para mudar o tamanho, e **▭ Quadro** cria uma nova. Cada caixa vira uma tela. Nas faixas deitadas, **― Linha** cria uma linha horizontal, e cada faixa entre duas linhas vira uma tela. Delete (ou **Apagar**) apaga a forma selecionada; ← → ou PgUp PgDn trocam de página. O ajuste é salvo na hora, por página e em fração da página, então vale para qualquer modelo de Kindle e continua depois de reconverter ou baixar de novo. **Voltar ao automático** apaga o ajuste da página. Remover a obra apaga o corte junto.
+- **Não cortar balões de fala (IA local):** nas faixas deitadas e no quadro a quadro, uma chave por obra liga um modelo de IA que acha os balões e o texto da página. Nas faixas, o corte desvia do balão em vez de passar no meio dele. No quadro a quadro, o quadro cresce para incluir o balão que vaza para fora e o texto solto perto dele. O modelo roda no computador, sem internet, e leva cerca de 0,1 s por página; na primeira vez o app baixa 11 MB (detector da ogkalu, licença Apache-2.0) e confere o SHA-256. No editor, os balões achados aparecem tracejados em laranja. Corte manual não é mexido.
+- **Achar quadros com IA local:** nas faixas deitadas e no quadro a quadro, outra chave por obra troca a busca pelas calhas por um modelo de IA treinado em HQ e mangá. Ele acha quadro colado, de borda escura e em página sem calha branca, onde a busca pelas calhas junta vários quadros num só. Arte que fica fora de todos os quadros achados vira um quadro extra, para nada sumir do livro; se o modelo não acha nenhum quadro, a página volta para as calhas. O modelo recebe a página colorida (acerta mais em página escura), roda no computador e leva cerca de 0,1 s por página; na primeira vez o app baixa 10 MB (YOLOv13n do projeto BDReader, licença Apache-2.0) e confere o SHA-256. No editor, os quadros achados viram as caixas editáveis.
+- **Cache de páginas convertidas:** Converter e Enviar guardam cada página já ajustada na pasta da obra e reaproveitam na próxima vez, então capítulo novo só converte o que é novo. Editar as linhas de corte de uma página reconverte só aquela página. Salvar ajustes diferentes ou trocar o modelo do Kindle limpa o cache da obra. A tela **Ajustar corte** mostra o tamanho do cache e tem o botão **Limpar cache**. Remover a obra apaga o cache junto.
 - **Formato:** o livro é um AZW3 de layout fixo (uma imagem por página, sumário por capítulo). Ele usa o mesmo ASIN e o mesmo nome de arquivo (`hq-<obra>.azw3`), então reenviar substitui o livro.
 
 ## Kindle: detalhes importantes
@@ -190,6 +199,7 @@ src/
 ├── NovelShelf.Comics               ajuste das páginas ao Kindle (SkiaSharp) e AZW3 de layout fixo
 ├── NovelShelf.Suwayomi             instala, sobe e conversa com o servidor de extensões do Mihon
 ├── NovelShelf.Devices              detecção do Kindle e envio (disco e MTP)
+├── NovelShelf.Vision               detectores de balões e de quadros por IA (ONNX Runtime) e download dos modelos
 └── NovelShelf.App                  interface (Avalonia + FluentAvalonia, MVVM)
 tests/
 ├── NovelShelf.Tests                fontes, biblioteca, quadrinhos, Suwayomi, dispositivos
@@ -213,8 +223,10 @@ tests/
 | `SuwayomiInstaller` / `SuwayomiServer` | Baixam Java e Suwayomi com checksum fixo, sobem o servidor em `127.0.0.1` e o encerram junto com o app. |
 | `SuwayomiClient` | Cliente GraphQL do Suwayomi: repositório do Project Nox, extensões e implementação do `IComicProvider`. |
 | `ComicDownloader` | Baixa as páginas dos próximos capítulos para `comics/`. |
-| `ComicPageProcessor` | Corta margens, divide páginas duplas, fatia webtoons e ajusta ao tamanho da tela. |
+| `ComicPageProcessor` | Corta margens, divide páginas duplas, fatia webtoons, corta faixas deitadas e ajusta ao tamanho da tela. |
+| `PanelDetector` | Acha os quadros da página sem IA: separa o desenho do fundo, segue as calhas a partir da borda e põe os quadros na ordem de leitura. |
 | `ComicBookBuilder` / `ComicExporter` | Montam o AZW3 de layout fixo com uma imagem por página. |
+| `ComicPageCache` | Guarda as páginas já convertidas de cada obra, separadas por ajuste e modelo do Kindle. |
 
 ### Fonte Novel Mania
 
@@ -297,7 +309,6 @@ NOVELSHELF_SUWAYOMI_ROOT=/tmp/suwayomi NOVELSHELF_DUMP_DIR=/tmp/azw3 dotnet test
 
 - [ ] MTP no Windows (WPD)
 - [ ] Mais sites de novels
-- [ ] Guardar as páginas já convertidas para acelerar reenvios
 - [ ] Login e Cloudflare nas fontes de quadrinhos
 - [ ] Compressão PalmDoc no AZW3
 
