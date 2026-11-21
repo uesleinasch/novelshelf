@@ -45,6 +45,9 @@ public sealed record PageCut(PageCutKind Kind, int Width, int Height, IReadOnlyL
 
     public double ToSourceFraction(int croppedRow) => SourceHeight == 0 ? 0 : (double)(CropTop + croppedRow) / SourceHeight;
     public double ToSourceFractionX(int croppedColumn) => SourceWidth == 0 ? 0 : (double)(CropLeft + croppedColumn) / SourceWidth;
+
+    public PanelFrame ToSourceFrame(PanelBox box) => new(
+        ToSourceFractionX(box.Left), ToSourceFraction(box.Top), ToSourceFractionX(box.Right), ToSourceFraction(box.Bottom));
 }
 
 internal static class LandscapeCutter

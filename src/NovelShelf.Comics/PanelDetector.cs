@@ -106,6 +106,9 @@ internal static class PanelDetector
         return Rows(ordered.Select(b => Scale(b, scale, page.Width, page.Height)).ToList(), page.Width, page.Height);
     }
 
+    public static PanelLayout Arrange(IEnumerable<PanelBox> boxes, bool rightToLeft, int width, int height) =>
+        Build(boxes.ToList(), rightToLeft, width, height);
+
     private static PanelLayout Build(List<PanelBox> boxes, bool rightToLeft, int width, int height) =>
         Rows(Order(boxes, rightToLeft, Math.Max(1, (int)(OverlapTolerance * height)), Math.Max(1, (int)(OverlapTolerance * width))),
             width, height);

@@ -23,7 +23,7 @@ public sealed partial class CutPageItem(int index, PageCut plan, bool isManual) 
     public bool IsSuspect => !IsManual && Plan.IsSuspect;
 
     public string Detail => IsManual
-        ? $"linhas manuais · {Screens(Plan.ScreenCount)}"
+        ? $"corte manual · {Screens(Plan.ScreenCount)}"
         : Plan.Kind is PageCutKind.PanelRows or PageCutKind.Panels && !Plan.IsSuspect
             ? $"{(Plan.Kind == PageCutKind.Panels ? "quadros" : "linhas de quadros")} · {Screens(Plan.ScreenCount)}"
         : Plan.IsSuspect
@@ -68,6 +68,8 @@ public sealed partial class CutEditorViewModel : ViewModelBase
     }
 
     public string ChapterTitle => _chapter.Title;
+    public bool EditsPanels => _options.EffectiveLayout.Mode == ComicReadingMode.Panels;
+    public bool RightToLeft => _options.RightToLeft;
     public ObservableCollection<CutPageItem> Visible { get; } = [];
     public bool Changed { get; private set; }
 
@@ -99,7 +101,7 @@ public sealed partial class CutEditorViewModel : ViewModelBase
     [NotifyPropertyChangedFor(nameof(ShownPanels))]
     private IReadOnlyList<PanelFrame>? _panels;
 
-    public IReadOnlyList<PanelFrame>? ShownPanels => ShowPanels ? Panels : null;
+    public IReadOnlyList<PanelFrame>? ShownPanels => ShowPanels && !EditsPanels ? Panels : null;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ShownBubbles))]
@@ -165,9 +167,7 @@ public sealed partial class CutEditorViewModel : ViewModelBase
             _ = DetectPanelsAsync(value);
             using (var stream = new MemoryStream(_pages[value.Index]))
                 Source = new Bitmap(stream);
-            Cuts = value.IsManual
-                ? _store.GetPageCuts(_comicId, _chapter.Key).GetValueOrDefault(value.Index)
-                : LinesFrom(value.Plan);
+            Cuts = CutsFor(value);
         }
         finally
         {
@@ -188,9 +188,12 @@ public sealed partial class CutEditorViewModel : ViewModelBase
     private async Task DetectPanelsAsync(CutPageItem item)
     {
         var page = _pages[item.Index];
-        var panels = await Task.Run(() => ComicPageProcessor.DetectPanels(page, _options));
-        if (ReferenceEquals(Selected, item))
-            Panels = panels;
+        if (!EditsPanels)
+        {
+            var panels = await Task.Run(() => ComicPageProcessor.DetectPanels(page, _options));
+            if (ReferenceEquals(Selected, item))
+                Panels = panels;
+        }
         if (_options.Bubbles is null)
             return;
         var bubbles = await Task.Run(() => ComicPageProcessor.DetectTextRegions(page, _options));
@@ -206,23 +209,19 @@ public sealed partial class CutEditorViewModel : ViewModelBase
         OnPropertyChanged(nameof(PageTitle));
     }
 
-    private static PageCuts LinesFrom(PageCut plan) => new()
+    private PageCuts CutsFor(CutPageItem item)
     {
-        Rows = plan.Screens.Zip(plan.Screens.Skip(1))
-            .Select(pair => plan.ToSourceFraction((pair.First.Bottom + pair.Second.Top) / 2))
-            .ToList(),
-        Columns = plan.Kind == PageCutKind.Panels ? ColumnsFrom(plan) : [],
-    };
+        var stored = item.IsManual ? _store.GetPageCuts(_comicId, _chapter.Key).GetValueOrDefault(item.Index) : null;
+        if (!EditsPanels)
+            return stored ?? new PageCuts { Rows = RowsFrom(item.Plan) };
+        var cuts = stored ?? new PageCuts();
+        return cuts.Panels.Count > 0
+            ? cuts
+            : cuts with { Columns = [], Panels = item.Plan.Panels.Select(item.Plan.ToSourceFrame).ToList() };
+    }
 
-    private static List<VerticalCut> ColumnsFrom(PageCut plan) => plan.Screens
-        .SelectMany(row =>
-        {
-            var inRow = plan.Panels.Where(p => p.Top < row.Bottom && p.Bottom > row.Top).OrderBy(p => p.Left).ToList();
-            var middle = plan.ToSourceFraction((row.Top + row.Bottom) / 2);
-            return inRow.Zip(inRow.Skip(1))
-                .Where(pair => pair.Second.Left >= pair.First.Right - 2)
-                .Select(pair => new VerticalCut(plan.ToSourceFractionX((pair.First.Right + pair.Second.Left) / 2), middle));
-        })
+    private static List<double> RowsFrom(PageCut plan) => plan.Screens.Zip(plan.Screens.Skip(1))
+        .Select(pair => plan.ToSourceFraction((pair.First.Bottom + pair.Second.Top) / 2))
         .ToList();
 
     private bool HasSelection() => Selected is not null;

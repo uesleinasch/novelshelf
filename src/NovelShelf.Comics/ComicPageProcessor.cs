@@ -151,11 +151,14 @@ public static class ComicPageProcessor
     }
 
     private static ManualGrid? Grid(PageCuts? cuts, SKRectI bounds, int sourceWidth, int sourceHeight) =>
-        cuts is null || cuts.Rows.Count == 0 && cuts.Columns.Count == 0
+        cuts is null || cuts.IsEmpty
             ? null
             : new ManualGrid(
                 cuts.Rows.Select(r => (int)Math.Round(r * sourceHeight) - bounds.Top).ToList(),
-                cuts.Columns.Select(c => ((int)Math.Round(c.X * sourceWidth) - bounds.Left, (int)Math.Round(c.Y * sourceHeight) - bounds.Top)).ToList());
+                cuts.Columns.Select(c => ((int)Math.Round(c.X * sourceWidth) - bounds.Left, (int)Math.Round(c.Y * sourceHeight) - bounds.Top)).ToList(),
+                cuts.Panels.Select(p => new PanelBox(
+                    (int)Math.Round(p.Left * sourceWidth) - bounds.Left, (int)Math.Round(p.Top * sourceHeight) - bounds.Top,
+                    (int)Math.Round(p.Right * sourceWidth) - bounds.Left, (int)Math.Round(p.Bottom * sourceHeight) - bounds.Top)).ToList());
 
     private static IReadOnlyList<int>? ManualRows(PageCuts? cuts, SKRectI bounds, int sourceHeight) =>
         cuts is null || cuts.Rows.Count == 0 && cuts.Columns.Count == 0
