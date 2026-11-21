@@ -189,6 +189,81 @@ public sealed class ComicLibraryTests : IDisposable
         Assert.Equal(1, reported[^1].Total);
     }
 
+    [Fact]
+    public async Task Export_keeps_converted_pages_and_converts_only_new_chapters()
+    {
+        var comic = _store.UpsertComic(_provider.Details("Invencível"));
+        await _downloader.DownloadNextAsync(comic.Id, 2, ct: Ct);
+        var exporter = new ComicExporter(_store, _paths, _downloader);
+        var cache = new ComicPageCache(_paths);
+
+        await exporter.ExportAsync(comic.Id, KindleProfile.Default, ct: Ct);
+        var before = CachedFiles(cache, comic.Id).ToDictionary(f => f, File.GetLastWriteTimeUtc);
+        await _downloader.DownloadNextAsync(comic.Id, 1, ct: Ct);
+        await exporter.ExportAsync(comic.Id, KindleProfile.Default, ct: Ct);
+
+        Assert.Equal(6, before.Count);
+        Assert.Equal(9, CachedFiles(cache, comic.Id).Length);
+        Assert.All(before, f => Assert.Equal(f.Value, File.GetLastWriteTimeUtc(f.Key)));
+        Assert.True(cache.SizeOf(comic.Id) > 0);
+    }
+
+    [Fact]
+    public async Task New_settings_or_model_drop_the_cache_of_the_work()
+    {
+        var comic = _store.UpsertComic(_provider.Details("Invencível"));
+        await _downloader.DownloadNextAsync(comic.Id, 2, ct: Ct);
+        var exporter = new ComicExporter(_store, _paths, _downloader);
+        var cache = new ComicPageCache(_paths);
+
+        await exporter.ExportAsync(comic.Id, KindleProfile.Default, ct: Ct);
+        var first = Assert.Single(Directory.GetDirectories(cache.FolderOf(comic.Id)));
+        _store.SetComicLayout(comic.Id, ComicLayout.Default with { Gamma = 1.4 });
+        await exporter.ExportAsync(comic.Id, KindleProfile.Default, ct: Ct);
+        var second = Assert.Single(Directory.GetDirectories(cache.FolderOf(comic.Id)));
+        await exporter.ExportAsync(comic.Id, KindleProfile.Get("basic"), ct: Ct);
+        var third = Assert.Single(Directory.GetDirectories(cache.FolderOf(comic.Id)));
+
+        Assert.Equal(3, new[] { first, second, third }.Distinct().Count());
+        Assert.Equal(6, CachedFiles(cache, comic.Id).Length);
+    }
+
+    [Fact]
+    public async Task Editing_a_cut_replaces_only_that_cached_page()
+    {
+        var comic = _store.UpsertComic(_provider.Details("Invencível"));
+        await _downloader.DownloadNextAsync(comic.Id, 1, ct: Ct);
+        _store.SetComicLayout(comic.Id, ComicLayout.Default with { Mode = ComicReadingMode.Landscape });
+        var exporter = new ComicExporter(_store, _paths, _downloader);
+        var cache = new ComicPageCache(_paths);
+        var chapter = Assert.Single(_store.GetComicChapters(comic.Id));
+
+        await exporter.ExportAsync(comic.Id, KindleProfile.Default, ct: Ct);
+        var before = CachedFiles(cache, comic.Id).ToDictionary(f => f, File.ReadAllBytes);
+        _store.SetPageCuts(comic.Id, chapter.Key, 1, new PageCuts { Rows = [0.5] });
+        await exporter.ExportAsync(comic.Id, KindleProfile.Default, ct: Ct);
+
+        var changed = before.Where(f => !f.Value.AsSpan().SequenceEqual(File.ReadAllBytes(f.Key))).Select(f => Path.GetFileName(f.Key));
+        Assert.Equal(["1.bin"], changed);
+    }
+
+    [Fact]
+    public async Task Clearing_the_cache_frees_the_space()
+    {
+        var comic = _store.UpsertComic(_provider.Details("Invencível"));
+        await _downloader.DownloadNextAsync(comic.Id, 1, ct: Ct);
+        var cache = new ComicPageCache(_paths);
+        await new ComicExporter(_store, _paths, _downloader).ExportAsync(comic.Id, KindleProfile.Default, ct: Ct);
+
+        cache.Clear(comic.Id);
+
+        Assert.Equal(0, cache.SizeOf(comic.Id));
+        Assert.Single(_downloader.PageFiles(comic.Id, Assert.Single(_store.GetComicChapters(comic.Id))).Take(1));
+    }
+
+    private static string[] CachedFiles(ComicPageCache cache, long comicId) =>
+        Directory.GetFiles(cache.FolderOf(comicId), "*.bin", SearchOption.AllDirectories);
+
     private sealed class SyncProgress(Action<ComicExportProgress> report) : IProgress<ComicExportProgress>
     {
         public void Report(ComicExportProgress value) => report(value);

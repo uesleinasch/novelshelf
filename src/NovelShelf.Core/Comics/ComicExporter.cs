@@ -40,6 +40,7 @@ public sealed class ComicExporter(LibraryStore store, AppPaths paths, ComicDownl
     {
         var options = new ComicPageOptions(profile, comic.RightToLeft, store.GetComicLayout(comic.Id));
         var cover = Cover(comic.Id, options);
+        var cache = new ComicPageCache(paths).Open(comic.Id, options);
         var total = volumes.Sum(v => v.Count);
         var done = 0;
         var books = new List<ExportedBook>();
@@ -53,7 +54,7 @@ public sealed class ComicExporter(LibraryStore store, AppPaths paths, ComicDownl
                 var files = downloader.PageFiles(comic.Id, chapter);
                 var pages = await Task.WhenAll(files.Select(f => File.ReadAllBytesAsync(f, ct)));
                 var cuts = store.GetPageCuts(comic.Id, chapter.Key);
-                var processed = await Task.Run(() => ComicPageProcessor.ProcessChapter(pages, options, ct, cuts), ct);
+                var processed = await Task.Run(() => ComicPageProcessor.ProcessChapter(pages, options, ct, cuts, cache.For(chapter.Key)), ct);
                 chapters.Add(new ComicChapter(chapter.Title, processed));
             }
 
