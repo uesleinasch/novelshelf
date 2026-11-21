@@ -11,12 +11,16 @@ public sealed class TextModelTests : IDisposable
     public async Task A_download_that_does_not_match_the_hash_is_thrown_away()
     {
         using var http = new HttpClient(new Fixed("não é um modelo"u8.ToArray()));
-        var model = new TextModel(_dir, http);
+        var text = new TextModel(_dir, http);
+        var panels = new PanelModel(_dir, http);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(() => model.InstallAsync(ct: TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => text.InstallAsync(ct: TestContext.Current.CancellationToken));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => panels.InstallAsync(ct: TestContext.Current.CancellationToken));
 
-        Assert.False(model.IsInstalled);
-        Assert.Null(model.Detector);
+        Assert.False(text.IsInstalled);
+        Assert.Null(text.Detector);
+        Assert.False(panels.IsInstalled);
+        Assert.Null(panels.Detector);
         Assert.Empty(Directory.GetFiles(_dir));
     }
 
